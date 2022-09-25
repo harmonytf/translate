@@ -38,6 +38,37 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
         assert unit.getvalue() == {"SOME_KEY": "SOME_OTHER_VALUE"}
         assert unit.line.line == ' "SOME_KEY" "SOME_OTHER_VALUE"//comment'
 
+    def test_regex_integrity(self):
+        # check if reading and setting the same value will result in the same line
+        #orig = r'"TEST_ESCAPES" "\"We test escapes\"\"\", trololo\\\",\ \\ \\\ \\\\, enter:\npost\\n-\\\nenter, tab:\tpost-\\taaa\\\taaa\b:)\""'
+        orig = r'"TEST_ESCAPES" "\"We test escapes\"\"\", trololo\\\",\\ \\\\, enter:\npost\\n-\\\nenter, tab:\tpost-\\taaa\\\taaa\b:)\""'
+        unit = self.UnitClass(vdf.VDFFileLine(orig))
+        val = unit.target + ""
+        unit.target = "TEMP_DIFFERENT"
+        unit.target = val # set it back
+        assert unit.target == val
+        assert unit.line.line == orig
+
+    def test_regex1(self):
+        unit = self.UnitClass(vdf.VDFFileLine(r' "SOME_KEY" "\"Refueling Raid\""//comment'))
+        assert unit.getvalue() == {"SOME_KEY": r'"Refueling Raid"'}
+
+    def test_regex2(self):
+        unit = self.UnitClass(vdf.VDFFileLine(r' "SOME_KEY" "\"SOME_\\nVALUE\""//comment'))
+        assert unit.getvalue() == {"SOME_KEY": r'"SOME_\nVALUE"'}
+        unit.target = r'"SOME_OTHER_\\nVALUE"'
+        assert unit.getvalue() == {"SOME_KEY": r'"SOME_OTHER_\\nVALUE"'}
+        assert unit.line.line == r' "SOME_KEY" "\"SOME_OTHER_\\\\nVALUE\""//comment'
+        unit.target = '"SOME_\tOTHER_\\\nVALUE"'
+        assert unit.getvalue() == {"SOME_KEY": '"SOME_\tOTHER_\\\nVALUE"'}
+        assert unit.line.line == ' "SOME_KEY" "\\"SOME_\\tOTHER_\\\\\\nVALUE\\""//comment'
+
+    def test_regex3(self):
+        unit = self.UnitClass(vdf.VDFFileLine(r'"TEST_ESCAPES" "\"We test escapes\"\"\", trololo\\\", enter:\npost-enter, tab:\tpost-\\ta\b:)\""'))
+        assert unit.target == r'"We test escapes""", trololo\", enter:' + "\npost-enter, tab:\tpost-" + r'\ta' + "\b" + r':)"'
+        unit.target = unit.target[0:6] + "<NEW>" + unit.target[6:]
+        assert unit.line.line == r'"TEST_ESCAPES" "\"We te<NEW>st escapes\"\"\", trololo\\\", enter:\npost-enter, tab:\tpost-\\ta\b:)\""'
+
 class TestVDFResourceStore(test_monolingual.TestMonolingualStore):
     StoreClass = vdf.VDFFile
     StoreClassUTF16 = vdf.VDFFileUTF16

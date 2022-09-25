@@ -121,6 +121,46 @@ vdfTranslationBase = """"lang"
 
 vdfPlaceholderLine = '		"PLACEHOLDER" ""\n' # \n? TODO: check with random line end of file what's the line ending (this will only fallback to placeholder in rare cases of inserting new unit)
 
+def unescape(string: str) -> str:
+    #return str(string).replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+    string = str(string)
+    # only unescape if the backslash before doesn't have another backslash before (ie. isn't escaped itself like: \\test <- a tabulator should not be inserted there)
+    # however we keep the \\ intact without escaping in case there are other \<letter> escapes that we aren't handling which we'd break otherwise
+    # string = re.sub(r'([^\\]|^|)\\([\\])', r'\1\2', string)
+    # string = re.sub(r'([^\\]|^|)\\(["\'\?])', r'\1\2', string)
+    # string = re.sub(r'([^\\]|^|)\\([n])', '\\1\n', string)
+    # string = re.sub(r'([^\\]|^|)\\([t])', '\\1\t', string)
+    # string = re.sub(r'([^\\]|^|)\\([v])', '\\1\v', string)
+    # string = re.sub(r'([^\\]|^|)\\([b])', '\\1\b', string)
+    # string = re.sub(r'([^\\]|^|)\\([r])', '\\1\r', string)
+    # string = re.sub(r'([^\\]|^|)\\([f])', '\\1\f', string)
+    # string = re.sub(r'([^\\]|^|)\\([a])', '\\1\a', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(["\'\?])', r'\1\2', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(n)', r'\1\n', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(t)', r'\1\t', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(v)', r'\1\v', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(b)', r'\1\b', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(r)', r'\1\r', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(f)', r'\1\f', string)
+    string = re.sub(r'(?<!\\)(\\\\)*\\(a)', r'\1\a', string)
+    string = re.sub(r'\\\\', r'\\', string)
+    # fixup
+    return string
+def escape(string: str) -> str:
+    return (str(string)
+        .replace('\\', '\\\\')
+        .replace('"', '\\"')
+        .replace('\n', '\\n')
+        .replace('\t', '\\t')
+        .replace("'", "\\'")
+        .replace('?', '\\?')
+        .replace('\v', '\\v')
+        .replace('\b', '\\b')
+        .replace('\r', '\\r')
+        .replace('\f', '\\f')
+        .replace('\a', '\\a')
+    )
+
 #_vdf_regex = re.compile(r'^\s*\"(?P<key>.+?)(?:(?<!\\)\")\s+\"(?P<val>.*?)(?:(?<!\\)\")\s*(?P<cond>\[[^\]\/]*\])?\s*(?:\/+.*)?$', re.UNICODE)
 #_vdf_regex = re.compile(r'^\s*\"(?P<key>.+?)(?:(?<!\\)\")\s+\"(?P<val>.*?)(?:(?<!\\)\")\s*(?:\[(?P<cond>[^\]\/]*)\])?\s*(?:\/+.*)?$', re.UNICODE)
 _vdf_regex = re.compile(r'^\s*\"(?P<key>.+?)(?:(?<!\\)\")\s+\"(?P<val>.*?)(?:(?<!\\)\")(?:\s*\[(?P<cond>[^\]\/]*)\])?(?P<comment>\s*\/+[^\r\n]*)?\s*$', re.UNICODE)
@@ -135,8 +175,8 @@ class VDFFileLine(object):
         self.valid = matched is not None
 
         if self.valid:
-            self.key = matched.group('key')
-            self.value = matched.group('val')
+            self.key = unescape(matched.group('key'))
+            self.value = unescape(matched.group('val'))
             self.posKey = matched.span('key')
             self.posValue = matched.span('val')
             #self.effectiveKey = self.key
@@ -150,19 +190,21 @@ class VDFFileLine(object):
         return self.line
 
     def set_value(self, new_value):
-        self.line = self.line[0 : self.posValue[0]] + new_value + self.line[self.posValue[1] : ]
+        new_value_escaped = escape(new_value)
+        self.line = self.line[0 : self.posValue[0]] + new_value_escaped + self.line[self.posValue[1] : ]
         self.value = new_value
-        delta = (self.posValue[0] + len(new_value)) - self.posValue[1]
-        self.posValue = ( self.posValue[0], self.posValue[0] + len(new_value) )
+        delta = (self.posValue[0] + len(new_value_escaped)) - self.posValue[1]
+        self.posValue = ( self.posValue[0], self.posValue[0] + len(new_value_escaped) )
         if self.comment:
             self.posComment = ( self.posComment[0] + delta, self.posComment[1] + delta )
         #self.refresh_regex()
 
     def set_key(self, new_key):
-        self.line = self.line[0 : self.posKey[0]] + new_key + self.line[self.posKey[1] : ]
+        new_key_escaped = escape(new_key)
+        self.line = self.line[0 : self.posKey[0]] + new_key_escaped + self.line[self.posKey[1] : ]
         self.key = new_key
-        delta = (self.posKey[0] + len(new_key)) - self.posKey[1]
-        self.posKey = ( self.posKey[0], self.posKey[0] + len(new_key) )
+        delta = (self.posKey[0] + len(new_key_escaped)) - self.posKey[1]
+        self.posKey = ( self.posKey[0], self.posKey[0] + len(new_key_escaped) )
         self.posValue = ( self.posValue[0] + delta, self.posValue[1] + delta )
         if self.comment:
             self.posComment = ( self.posComment[0] + delta, self.posComment[1] + delta )
