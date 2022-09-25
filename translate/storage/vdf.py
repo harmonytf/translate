@@ -143,7 +143,7 @@ def unescape(string: str) -> str:
     string = re.sub(r'(?<!\\)(\\\\)*\\(r)', '\\1\r', string)
     string = re.sub(r'(?<!\\)(\\\\)*\\(f)', '\\1\f', string)
     string = re.sub(r'(?<!\\)(\\\\)*\\(a)', '\\1\a', string)
-    string = re.sub('\\\\', '\\', string)
+    string = re.sub(r'\\\\', r'\\', string)
     # fixup
     return string
 def escape(string: str) -> str:
@@ -152,8 +152,8 @@ def escape(string: str) -> str:
         .replace('"', '\\"')
         .replace('\n', '\\n')
         .replace('\t', '\\t')
-        .replace("'", "\\'")
-        .replace('?', '\\?')
+        #.replace("'", "\\'") # no need to escape
+        #.replace('?', '\\?') # no need to escape
         .replace('\v', '\\v')
         .replace('\b', '\\b')
         .replace('\r', '\\r')
@@ -163,7 +163,7 @@ def escape(string: str) -> str:
 
 #_vdf_regex = re.compile(r'^\s*\"(?P<key>.+?)(?:(?<!\\)\")\s+\"(?P<val>.*?)(?:(?<!\\)\")\s*(?P<cond>\[[^\]\/]*\])?\s*(?:\/+.*)?$', re.UNICODE)
 #_vdf_regex = re.compile(r'^\s*\"(?P<key>.+?)(?:(?<!\\)\")\s+\"(?P<val>.*?)(?:(?<!\\)\")\s*(?:\[(?P<cond>[^\]\/]*)\])?\s*(?:\/+.*)?$', re.UNICODE)
-_vdf_regex = re.compile(r'^\s*\"(?P<key>.+?)(?:(?<!\\)\")\s+\"(?P<val>.*?)(?:(?<!\\)\")(?:\s*\[(?P<cond>[^\]\/]*)\])?(?P<comment>\s*\/+[^\r\n]*)?\s*$', re.UNICODE)
+_vdf_regex = re.compile(r'^\s*\"(?P<key>.+?(?<!\\)(?:\\\\)*)(?:\")\s+\"(?P<val>.*?(?<!\\)(?:\\\\)*)(?:\")(?:\s*\[(?P<cond>[^\]\/]*)\])?(?P<comment>\s*\/+[^\r\n]*)?\s*$', re.UNICODE)
 
 class VDFFileLine(object):
     def __init__(self, line):

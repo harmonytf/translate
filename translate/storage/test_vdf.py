@@ -38,7 +38,21 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
         assert unit.getvalue() == {"SOME_KEY": "SOME_OTHER_VALUE"}
         assert unit.line.line == ' "SOME_KEY" "SOME_OTHER_VALUE"//comment'
 
-    def test_regex_integrity(self):
+    def test_ending_escaped_backslash(self):
+        unit = self.UnitClass(vdf.VDFFileLine(' "SOME_KEY" "SOME_VALUE\\\\"//comment'))
+        assert unit.target == "SOME_VALUE\\"
+        unit.target = "SOME_OTHER_VALUE\\"
+        assert unit.getvalue() == {"SOME_KEY": "SOME_OTHER_VALUE\\"}
+        assert unit.line.line == ' "SOME_KEY" "SOME_OTHER_VALUE\\\\"//comment'
+
+    def test_ending_escaped_quote(self):
+        unit = self.UnitClass(vdf.VDFFileLine(' "SOME_KEY" "SOME_VALUE\\""//comment'))
+        assert unit.target == 'SOME_VALUE"'
+        unit.target = 'SOME_OTHER_VALUE"'
+        assert unit.getvalue() == {"SOME_KEY": "SOME_OTHER_VALUE\""}
+        assert unit.line.line == ' "SOME_KEY" "SOME_OTHER_VALUE\\""//comment'
+
+    def test_escaping_integrity(self):
         # check if reading and setting the same value will result in the same line
         #orig = r'"TEST_ESCAPES" "\"We test escapes\"\"\", trololo\\\",\ \\ \\\ \\\\, enter:\npost\\n-\\\nenter, tab:\tpost-\\taaa\\\taaa\b:)\""'
         orig = r'"TEST_ESCAPES" "\"We test escapes\"\"\", trololo\\\",\\ \\\\, enter:\npost\\n-\\\nenter, tab:\tpost-\\taaa\\\taaa\b:)\""'
@@ -49,11 +63,11 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
         assert unit.target == val
         assert unit.line.line == orig
 
-    def test_regex1(self):
+    def test_escaping1(self):
         unit = self.UnitClass(vdf.VDFFileLine(r' "SOME_KEY" "\"Refueling Raid\""//comment'))
         assert unit.getvalue() == {"SOME_KEY": r'"Refueling Raid"'}
 
-    def test_regex2(self):
+    def test_escaping2(self):
         unit = self.UnitClass(vdf.VDFFileLine(r' "SOME_KEY" "\"SOME_\\nVALUE\""//comment'))
         assert unit.getvalue() == {"SOME_KEY": r'"SOME_\nVALUE"'}
         unit.target = r'"SOME_OTHER_\\nVALUE"'
@@ -63,7 +77,7 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
         assert unit.getvalue() == {"SOME_KEY": '"SOME_\tOTHER_\\\nVALUE"'}
         assert unit.line.line == ' "SOME_KEY" "\\"SOME_\\tOTHER_\\\\\\nVALUE\\""//comment'
 
-    def test_regex3(self):
+    def test_escaping3(self):
         unit = self.UnitClass(vdf.VDFFileLine(r'"TEST_ESCAPES" "\"We test escapes\"\"\", trololo\\\", enter:\npost-enter, tab:\tpost-\\ta\b:)\""'))
         assert unit.target == r'"We test escapes""", trololo\", enter:' + "\npost-enter, tab:\tpost-" + r'\ta' + "\b" + r':)"'
         unit.target = unit.target[0:6] + "<NEW>" + unit.target[6:]
