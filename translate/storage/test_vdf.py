@@ -10,6 +10,15 @@ from translate.storage import base, test_monolingual, vdf
 #        unit.setid("SOME_KEY")
 #        assert unit.getlocations() == ["SOME_KEY"]
 
+class TestVDFFileLine:
+    def test1(self):
+        line = vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [$PS4]')
+        assert line.cond == "$PS4"
+
+    def test2(self):
+        line = vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [!$PS4]')
+        assert line.cond == "!$PS4"
+
 class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
     UnitClass = vdf.VDFUnit
     print("aaaa")
@@ -37,6 +46,20 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
         unit.target = "SOME_OTHER_VALUE"
         assert unit.getvalue() == {"SOME_KEY": "SOME_OTHER_VALUE"}
         assert unit.line.line == ' "SOME_KEY" "SOME_OTHER_VALUE"//comment'
+
+    def test_empty_val_insertion(self):
+        unit = self.UnitClass(vdf.VDFFileLine(' "EMPTY" ""'))
+        unit.target = "SOME_OTHER_VALUE"
+        assert unit.getvalue() == {"EMPTY": "SOME_OTHER_VALUE"}
+        assert unit.line.line == ' "EMPTY" "SOME_OTHER_VALUE"'
+
+    def test_key_and_val_change(self):
+        line = vdf.VDFFileLine(' "OLD_KEY" "VALUE"')
+        line.set_key("NEW_KEY______")
+        line.set_value("NEW_VALUE")
+        assert line.key == "NEW_KEY______"
+        assert line.value == "NEW_VALUE"
+        assert line.line == ' "NEW_KEY______" "NEW_VALUE"'
 
     def test_ending_escaped_backslash(self):
         unit = self.UnitClass(vdf.VDFFileLine(' "SOME_KEY" "SOME_VALUE\\\\"//comment'))
@@ -82,6 +105,15 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
         assert unit.target == r'"We test escapes""", trololo\", enter:' + "\npost-enter, tab:\tpost-" + r'\ta' + "\b" + r':)"'
         unit.target = unit.target[0:6] + "<NEW>" + unit.target[6:]
         assert unit.line.line == r'"TEST_ESCAPES" "\"We te<NEW>st escapes\"\"\", trololo\\\", enter:\npost-enter, tab:\tpost-\\ta\b:)\""'
+
+    def test_no_unnecessary_escape(self):
+        unit = self.UnitClass(vdf.VDFFileLine(r' "SOME_KEY" ""'))
+        unit.target = r'\"' + r"'?ntvbrfa"
+        assert unit.line.line == r' "SOME_KEY" "\\\"' + r"'?ntvbrfa" + r'"'
+
+    def test_cond(self):
+        unit = self.UnitClass(vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [$PS4]'))
+        assert unit.getlocations() == ["SOME_KEY->$PS4"]
 
 class TestVDFResourceStore(test_monolingual.TestMonolingualStore):
     StoreClass = vdf.VDFFile

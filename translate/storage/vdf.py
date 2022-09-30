@@ -45,22 +45,30 @@ class VDFUnit(base.DictUnit):
         if isinstance(source, VDFFileLine):# and source.valid:
             line = source
             self.line = line
+            self._id = line.key
+            #if line.cond is not None:
+            #    self.set_unitid((self.IdClass([("key", line.key), ("key", line.cond)])))
+            #else:
+            #    self.set_unitid(self.IdClass([("key", line.key)]))
+            #self._id = str(self._unitid)
+            super().__init__(line.key)
+            self._target = line.value
             if line.cond is not None:
                 self.set_unitid((self.IdClass([("key", line.key), ("key", line.cond)])))
             else:
                 self.set_unitid(self.IdClass([("key", line.key)]))
-            #self._id = line.key
-            self._id = str(self._unitid)
-            super().__init__(line.key)
-            self._target = line.value
         else:
             #self.line = VDFFileLine('		"' + source + '" ""')
             self.line = VDFFileLine(vdfPlaceholderLine)
             self.line.set_key(source)
-            self.set_unitid(self.IdClass([("key", source)]))
+            #self.set_unitid(self.IdClass([("key", source)]))
             self._id = source
             super().__init__(source)
             self._target = ""
+            if self.line.cond is not None:
+                self.set_unitid((self.IdClass([("key", self.line.key), ("key", self.line.cond)])))
+            else:
+                self.set_unitid(self.IdClass([("key", self.line.key)]))
 
         # Ensure we have ID (for serialization)
         #if source:
@@ -121,9 +129,20 @@ vdfTranslationBase = """"lang"
 
 vdfPlaceholderLine = '		"PLACEHOLDER" ""\n' # \n? TODO: check with random line end of file what's the line ending (this will only fallback to placeholder in rare cases of inserting new unit)
 
+# Regex to fix the below
+# titanfall2/r1/fr: skipping update due to parse error: String contains control char: '%$rui\hud\gametype_icons\bounty_hunt\bh_titan% New Bounty Incoming'
+_rui_cleanup_regex = re.compile(r'(%\$(?:rui|vgui)[A-Za-z0-9_\\]*)(\\)([A-Za-z0-9_\\/]*?%)')
+
+# TODO fix:
+# ^ we might need to add unescaped version of VDF format entries...
 def unescape(string: str) -> str:
     #return str(string).replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
     string = str(string)
+
+    # Fix Titanfall 2 edge case (single key using unescaped forward slashes instead of backward)
+    while _rui_cleanup_regex.match(string):
+        string = re.sub(_rui_cleanup_regex, "\\1/\\3", string)
+
     # only unescape if the backslash before doesn't have another backslash before (ie. isn't escaped itself like: \\test <- a tabulator should not be inserted there)
     # however we keep the \\ intact without escaping in case there are other \<letter> escapes that we aren't handling which we'd break otherwise
     # string = re.sub(r'([^\\]|^|)\\([\\])', r'\1\2', string)
