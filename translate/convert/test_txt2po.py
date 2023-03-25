@@ -6,7 +6,6 @@ from translate.convert import test_convert, txt2po
 
 
 class BaseTxt2POTester:
-
     ConverterClass = txt2po.txt2po
     Flavour = None
 
@@ -140,7 +139,6 @@ Second paragraph
 
 
 class TestDoku2po(BaseTxt2POTester):
-
     Flavour = "dokuwiki"
 
     def test_convert_empty(self):
@@ -233,12 +231,10 @@ class TestTxt2POCommand(test_convert.TestConvertCommand, TestTxt2PO):
 
     convertmodule = txt2po
     defaultoptions = {"progress": "none"}
-
-    def test_help(self, capsys):
-        """tests getting help"""
-        options = super().test_help(capsys)
-        options = self.help_check(options, "-P, --pot")
-        options = self.help_check(options, "--duplicates")
-        options = self.help_check(options, "--encoding")
-        options = self.help_check(options, "--flavour")
-        options = self.help_check(options, "--no-segmentation", last=True)
+    expected_options = [
+        "-P, --pot",
+        "--duplicates",
+        "--encoding",
+        "--flavour",
+        "--no-segmentation",
+    ]

@@ -93,7 +93,6 @@ class rerc:
         addnl = False
 
         for c in toks.controls:
-
             if isinstance(c, str):
                 yield from self.convert_comment(addnl, c)
                 addnl = True
@@ -145,7 +144,9 @@ class rerc:
         yield BLOCK_END
 
     def convert_string_table(self, s, loc, toks):
-        yield from toks[0:2]
+        yield toks[0]
+        if toks[1]:
+            yield f" {toks[1]}"
         yield NL
         yield BLOCK_START
         yield NL
@@ -195,7 +196,6 @@ class rerc:
 
     def convert_popup(self, popup, pre_name, ident=1):
         identation = " " * (4 * ident)
-
         yield identation
         yield popup.block_type
         if popup.caption:
@@ -210,12 +210,14 @@ class rerc:
                     yield '"' + self.inputdict[msgid][EMPTY_LOCATION] + '"'
             else:
                 yield popup.caption
-            yield from popup.post_caption  # The rest of the options
-            yield NL
         else:
             yield " "
-            yield from popup.post_caption  # The rest of the options
-            yield NL
+
+        for value in popup.values_:
+            yield ", "
+            yield value
+        yield from popup.post_caption  # The rest of the options
+        yield NL
 
         yield identation
         yield BLOCK_START
@@ -232,7 +234,6 @@ class rerc:
                 yield " "
 
                 if element.values_ and len(element.values_) >= 2:
-
                     name = rc.generate_menuitem_name(
                         pre_name, element.block_type, element.values_[1]
                     )
@@ -298,7 +299,7 @@ class rerc:
             if toks.block_type == "STRINGTABLE":
                 return list(self.convert_string_table(s, loc, toks))
 
-            if toks.block_type == "MENU":
+            if toks.block_type in ("MENU", "MENUEX"):
                 return list(self.convert_menu(s, loc, toks))
 
         return toks
@@ -313,7 +314,6 @@ class rerc:
         """make a dictionary of the translations"""
         for unit in store.units:
             if includefuzzy or not unit.isfuzzy():
-
                 rcstring = unit.target
                 if len(rcstring.strip()) == 0:
                     rcstring = unit.source

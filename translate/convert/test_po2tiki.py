@@ -7,7 +7,6 @@ from translate.convert import po2tiki, test_convert
 
 
 class TestPo2Tiki:
-
     ConverterClass = po2tiki.po2tiki
 
     def _convert(self, input_string, template_string=None, success_expected=True):
@@ -61,8 +60,3 @@ class TestPo2TikiCommand(test_convert.TestConvertCommand, TestPo2Tiki):
 
     convertmodule = po2tiki
     defaultoptions = {}
-
-    def test_help(self, capsys):
-        """tests getting help"""
-        options = super().test_help(capsys)
-        self.help_check(options, "", last=True)

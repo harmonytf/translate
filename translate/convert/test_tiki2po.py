@@ -8,7 +8,6 @@ from translate.convert import test_convert, tiki2po
 
 
 class TestTiki2Po:
-
     ConverterClass = tiki2po.tiki2po
 
     def _convert(
@@ -70,8 +69,6 @@ class TestTiki2PoCommand(test_convert.TestConvertCommand, TestTiki2Po):
 
     convertmodule = tiki2po
     defaultoptions = {}
-
-    def test_help(self, capsys):
-        """tests getting help"""
-        options = super().test_help(capsys)
-        options = self.help_check(options, "--include-unused")
+    expected_options = [
+        "--include-unused",
+    ]

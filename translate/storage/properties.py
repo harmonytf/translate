@@ -126,7 +126,6 @@ Name and Value pairs:
 
 """
 
-import collections
 import re
 from codecs import iterencode
 from copy import deepcopy
@@ -484,7 +483,10 @@ class DialectGwt(DialectJavaUtf8):
 
     @classmethod
     def encode(cls, string, encoding=None):
-        result = super().encode(string, encoding)
+        if encoding not in ("utf-8", "utf-16"):
+            result = quote.javapropertiesencode(string or "")
+        else:
+            result = quote.java_utf8_properties_encode(string or "")
         return result.replace("'", "''")
 
     @classmethod
@@ -565,7 +567,7 @@ class proppluralunit(base.TranslationUnit):
         """Construct a blank propunit."""
         self.personality = get_dialect(personality)
         super().__init__(source)
-        self.units = collections.OrderedDict()
+        self.units = {}
         self.name = ""
 
     @staticmethod

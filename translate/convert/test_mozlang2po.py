@@ -6,7 +6,6 @@ from translate.convert import mozlang2po, test_convert
 
 
 class TestLang2PO:
-
     ConverterClass = mozlang2po.lang2po
 
     def _convert(
@@ -146,10 +145,8 @@ class TestLang2POCommand(test_convert.TestConvertCommand, TestLang2PO):
 
     convertmodule = mozlang2po
     defaultoptions = {"progress": "none"}
-
-    def test_help(self, capsys):
-        """tests getting help"""
-        options = super().test_help(capsys)
-        options = self.help_check(options, "-P, --pot")
-        options = self.help_check(options, "--encoding=ENCODING")
-        options = self.help_check(options, "--duplicates=DUPLICATESTYLE", last=True)
+    expected_options = [
+        "-P, --pot",
+        "--encoding=ENCODING",
+        "--duplicates=DUPLICATESTYLE",
+    ]

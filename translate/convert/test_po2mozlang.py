@@ -4,7 +4,6 @@ from translate.convert import po2mozlang, test_convert
 
 
 class TestPO2Lang:
-
     ConverterClass = po2mozlang.po2lang
 
     def _convert(
@@ -195,12 +194,10 @@ class TestPO2LangCommand(test_convert.TestConvertCommand, TestPO2Lang):
 
     convertmodule = po2mozlang
     defaultoptions = {"progress": "none"}
-
-    def test_help(self, capsys):
-        """tests getting help"""
-        options = super().test_help(capsys)
-        options = self.help_check(options, "-t TEMPLATE, --template=TEMPLATE")
-        options = self.help_check(options, "--threshold=PERCENT")
-        options = self.help_check(options, "--fuzzy")
-        options = self.help_check(options, "--mark-active")
-        options = self.help_check(options, "--nofuzzy", last=True)
+    expected_options = [
+        "-t TEMPLATE, --template=TEMPLATE",
+        "--threshold=PERCENT",
+        "--fuzzy",
+        "--mark-active",
+        "--nofuzzy",
+    ]

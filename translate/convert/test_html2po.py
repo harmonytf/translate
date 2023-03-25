@@ -583,7 +583,6 @@ years has helped to bridge the digital divide to a limited extent.</p> \r
         self.check_single(htmlsource, innertext)
 
     def test_php_multiline(self):
-
         # A multi-line php string to test
         php1 = """<? abc
 def
@@ -653,6 +652,13 @@ class TestHTML2POCommand(test_convert.TestConvertCommand, TestHTML2PO):
     convertmodule = html2po
     defaultoptions = {"progress": "none"}
 
+    expected_options = [
+        "-P, --pot",
+        "--duplicates=DUPLICATESTYLE",
+        "--keepcomments",
+        "--multifile=MULTIFILESTYLE",
+    ]
+
     def test_multifile_single(self):
         """Test the --multifile=single option and make sure it produces one pot file per input file."""
         self.create_testfile(
@@ -695,11 +701,3 @@ class TestHTML2POCommand(test_convert.TestConvertCommand, TestHTML2PO):
         assert "coming through" in content
         assert "cannot hear" in content
         assert err == ""
-
-    def test_help(self, capsys):
-        """Test getting help."""
-        options = super().test_help(capsys)
-        options = self.help_check(options, "-P, --pot")
-        options = self.help_check(options, "--duplicates=DUPLICATESTYLE")
-        options = self.help_check(options, "--keepcomments")
-        options = self.help_check(options, "--multifile=MULTIFILESTYLE", last=True)

@@ -23,7 +23,7 @@ and :class:`FluentUnit` providing file and unit level access.
 """
 
 from fluent.syntax import FluentParser, ast, parse, serialize, visitor
-from fluent.syntax.serializer import serialize_pattern
+from fluent.syntax.serializer import serialize_pattern, serialize_placeable
 from fluent.syntax.stream import FluentParserStream
 from translate.storage import base
 
@@ -58,6 +58,7 @@ class FluentUnit(base.TranslationUnit):
         self._id = None
         self._errors = {}
         self._attributes = {}
+        self._placeables = []
         if source is not None:
             self._type = ast.Message
             self._set_value(source)
@@ -93,14 +94,10 @@ class FluentUnit(base.TranslationUnit):
     def getattributes(self):
         return self._attributes
 
-    def parse(self, entry):
-        # Handle this unit separately if it is invalid.
-        if isinstance(entry, ast.Junk):
-            for annotation in entry.annotations:
-                self.adderror(annotation.code, annotation.message)
-            self._set_value(entry.content)
-            return
+    def getplaceables(self):
+        return self._placeables
 
+    def parse(self, entry):
         this = self
 
         class Parser(visitor.Visitor):
@@ -109,6 +106,10 @@ class FluentUnit(base.TranslationUnit):
             @staticmethod
             def visit_Attribute(node):
                 this._attributes[node.id.name] = source_from_entry(node)
+
+            @staticmethod
+            def visit_Placeable(node):
+                this._placeables.append(serialize_placeable(node))
 
             @staticmethod
             def visit_Comment(node):
@@ -194,6 +195,13 @@ class FluentFile(base.TranslationStore):
     def parse(self, fluentsrc):
         resource = parse(fluentsrc.decode("utf-8"))
         for entry in resource.body:
+            # Handle this unit separately if it is invalid.
+            if isinstance(entry, ast.Junk):
+                for annotation in entry.annotations:
+                    raise ValueError(
+                        f"{annotation.code}: {annotation.message} [offset {annotation.span.start}]"
+                    )
+
             self.addunit(FluentUnit(entry=entry))
 
     def serialize(self, out):

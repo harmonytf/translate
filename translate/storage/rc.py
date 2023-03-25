@@ -238,6 +238,12 @@ def rc_statement():
     popup_block <<= Group(
         Keyword("POPUP")("block_type")
         + Optional(quoted_string("caption"))
+        + Optional(
+            ","
+            + delimited_list(
+                concatenated_string ^ constant ^ numbers ^ Group(combined_constants)
+            ).set_results_name("values_")
+        )
         + block_start
         + ZeroOrMore(Group(menu_item | popup_block | comments), stop_on=block_end)(
             "elements"
@@ -247,7 +253,7 @@ def rc_statement():
 
     menu = (
         name_id("block_id")
-        + Keyword("MENU")("block_type")
+        + (Keyword("MENU") | Keyword("MENUEX"))("block_type")
         + block_options
         + block_start
         + ZeroOrMore(popup_block | comments, stop_on=block_end)
@@ -341,9 +347,7 @@ class rcfile(base.TranslationStore):
             self.addunit(newunit)
 
         for element in popup.elements:
-
             if element.block_type and element.block_type == "MENUITEM":
-
                 if element.values_ and len(element.values_) >= 2:
                     newtext = extract_text(element.values_)
                     if newtext:
@@ -383,14 +387,17 @@ class rcfile(base.TranslationStore):
 
         for statement in results:
             # Parse pragma
-            if statement[0] == "#pragma" and "code_page" in statement[1]:
+            if (
+                statement[0] == "#pragma"
+                and "code_page" in statement[1]
+                and self.encoding not in ("utf-8", "utf-16")
+            ):
                 expected_encoding = parse_encoding_pragma(statement[1])
                 if expected_encoding and expected_encoding != self.encoding:
                     self.units = []
                     self.parse(rcsrc, expected_encoding)
                     return
             if statement.language:
-
                 if self.lang is None or statement.language == self.lang:
                     if self.sublang is None or statement.sublanguage == self.sublang:
                         self.lang = statement.language
@@ -403,9 +410,7 @@ class rcfile(base.TranslationStore):
                 continue
 
             if processblocks and statement.block_type:
-
                 if statement.block_type in ("DIALOG", "DIALOGEX"):
-
                     if statement.caption:
                         newunit = rcunit(escape_to_python(statement.caption[1:-1]))
                         newunit.name = generate_dialog_caption_name(
@@ -435,7 +440,6 @@ class rcfile(base.TranslationStore):
                             control.values_[0].startswith('"')
                             or control.values_[0].startswith("'")
                         ):
-
                             # The first value without quoted chars.
                             newtext = extract_text(control.values_)
                             if newtext:
@@ -451,20 +455,17 @@ class rcfile(base.TranslationStore):
 
                     continue
 
-                if statement.block_type in ("MENU"):
-
+                if statement.block_type in ("MENU", "MENUEX"):
                     pre_name = generate_menu_pre_name(
                         statement.block_type, statement.block_id[0]
                     )
 
                     for popup in statement.popups:
-
                         self.add_popup_units(pre_name, popup)
 
                     continue
 
                 if statement.block_type in ("STRINGTABLE"):
-
                     for text in statement.controls:
                         if isinstance(text, str):
                             # This is a comment

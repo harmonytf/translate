@@ -1,7 +1,6 @@
 import os
 import plistlib
 import re
-from collections import OrderedDict
 
 from translate.lang import data
 from translate.misc.multistring import multistring
@@ -50,14 +49,18 @@ class StringsDictUnit(base.DictUnit):
 
     @property
     def outerkey(self):
-        if self._unitid is None or len(self._unitid.parts) < 1:
+        self.get_unitid()
+
+        if len(self._unitid.parts) < 1:
             return None
 
         return self._unitid.parts[0][1]
 
     @property
     def innerkey(self):
-        if self._unitid is None or len(self._unitid.parts) < 2:
+        self.get_unitid()
+
+        if len(self._unitid.parts) < 2:
             return None
 
         return self._unitid.parts[1][1]
@@ -65,8 +68,9 @@ class StringsDictUnit(base.DictUnit):
     def getid(self):
         return self.source
 
-    def setid(self, newid):
-        self.source = newid
+    def setid(self, value, unitid=None):
+        self.source = value
+        super().setid(value, unitid)
 
 
 class StringsDictFile(base.DictStore):
@@ -126,9 +130,9 @@ class StringsDictFile(base.DictStore):
         """Read a .stringsdict file into a dictionary, and convert it to translation units."""
 
         if isinstance(input, (bytes, str)):
-            plist = plistlib.loads(input, dict_type=OrderedDict)
+            plist = plistlib.loads(input)
         elif input is not None:
-            plist = plistlib.load(input, dict_type=OrderedDict)
+            plist = plistlib.load(input)
         else:
             plist = {}
 
@@ -160,17 +164,17 @@ class StringsDictFile(base.DictStore):
                     raise ValueError(f"Unexpected key {innerkey} in {key}")
 
     def serialize(self, out):
-        plist = OrderedDict()
+        plist = {}
 
         for u in self.units:
             loc = u.outerkey
             subkey = u.innerkey
 
             if loc not in plist:
-                plist[loc] = OrderedDict()
+                plist[loc] = {}
 
             if subkey is not None:
-                plurals = OrderedDict()
+                plurals = {}
                 plurals["NSStringFormatSpecTypeKey"] = "NSStringPluralRuleType"
                 plurals["NSStringFormatValueTypeKey"] = u.format_value_type
 

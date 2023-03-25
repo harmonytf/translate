@@ -6,7 +6,6 @@ from translate.convert import po2ical, test_convert
 
 
 class TestPO2Ical:
-
     ConverterClass = po2ical.po2ical
 
     def _convert(
@@ -364,11 +363,9 @@ class TestPO2IcalCommand(test_convert.TestConvertCommand, TestPO2Ical):
 
     convertmodule = po2ical
     defaultoptions = {"progress": "none"}
-
-    def test_help(self, capsys):
-        """tests getting help"""
-        options = super().test_help(capsys)
-        options = self.help_check(options, "-t TEMPLATE, --template=TEMPLATE")
-        options = self.help_check(options, "--threshold=PERCENT")
-        options = self.help_check(options, "--fuzzy")
-        options = self.help_check(options, "--nofuzzy", last=True)
+    expected_options = [
+        "-t TEMPLATE, --template=TEMPLATE",
+        "--threshold=PERCENT",
+        "--fuzzy",
+        "--nofuzzy",
+    ]
