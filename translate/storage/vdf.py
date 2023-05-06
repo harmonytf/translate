@@ -101,10 +101,9 @@ class VDFUnit(base.DictUnit):
         self._target = str(target)
         self.line.set_value(str(target)) # doesn't seem to always work how it should...
 
-    def setid(self, value):
+    def setid(self, value, unitid=None):
         self._id = value
-        #self._unitid = None
-        self._unitid = self.IdClass.from_string(value)
+        self._unitid = unitid if unitid is not None else self.IdClass.from_string(value)
 
     def getid(self):
         return self._id
