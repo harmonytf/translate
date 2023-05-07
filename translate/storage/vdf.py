@@ -8,13 +8,15 @@ from io import BufferedWriter
 from translate.storage import base
 
 class VDFUnitId(base.UnitId):
-    KEY_SEPARATOR = "->"
+    #KEY_SEPARATOR = "->" # should be unused! (but making it empty string would make me need to change more code)
+    KEY_SEPARATOR = ""
+    INDEX_SEPARATOR = ""
 
     def __str__(self):
         result = super().__str__()
         # Strip leading ->
-        if result.startswith(self.KEY_SEPARATOR):
-            return result[len(self.KEY_SEPARATOR) :]
+        #if result.startswith(self.KEY_SEPARATOR):
+        #    return result[len(self.KEY_SEPARATOR) :]
         return result
 
     #@classmethod
@@ -33,7 +35,25 @@ class VDFUnitId(base.UnitId):
     #        return result[0 : result.find("[")]
     #    return result
 
-class VDFUnit(base.DictUnit):
+    @classmethod
+    def from_string(cls, text): # same as parent, except we don't assume "index" is an int, we make it str instead
+        result = []
+        bracepos = text.find("[")
+        endbracepos = text.find("]")
+        if bracepos != -1 and endbracepos != -1:
+            if bracepos > 0:
+                result.append(("key", text[:bracepos]))
+                text = text[bracepos:]
+            result.extend(
+                ("index", str(pos))
+                for pos in text.replace("[", " ").replace("]", " ").split()
+            )
+        else:
+            result.append(("key", text))
+        return cls(result)
+
+#class VDFUnit(base.DictUnit):
+class VDFUnit(base.TranslationUnit):
     """A VDF entry"""
 
     IdClass = VDFUnitId
@@ -54,7 +74,8 @@ class VDFUnit(base.DictUnit):
             super().__init__(line.key)
             self._target = line.value
             if line.cond is not None:
-                self.set_unitid((self.IdClass([("key", line.key), ("key", line.cond)])))
+                #self.set_unitid((self.IdClass([("key", line.key), ("key", line.cond)])))
+                self.set_unitid((self.IdClass([("key", line.key), ("index", line.cond)])))
             else:
                 self.set_unitid(self.IdClass([("key", line.key)]))
         else:
@@ -66,7 +87,8 @@ class VDFUnit(base.DictUnit):
             super().__init__(source)
             self._target = ""
             if self.line.cond is not None:
-                self.set_unitid((self.IdClass([("key", self.line.key), ("key", self.line.cond)])))
+                #self.set_unitid((self.IdClass([("key", self.line.key), ("key", self.line.cond)])))
+                self.set_unitid((self.IdClass([("key", self.line.key), ("index", self.line.cond)])))
             else:
                 self.set_unitid(self.IdClass([("key", self.line.key)]))
 
@@ -105,6 +127,10 @@ class VDFUnit(base.DictUnit):
         self._id = value
         self._unitid = unitid if unitid is not None else self.IdClass.from_string(value)
 
+    def set_unitid(self, unitid): # copy-pasted from DictUnit
+        # Set _unitid first to avoid need to re-construct it from id
+        self.setid(str(unitid), unitid)
+
     def getid(self):
         return self._id
 
@@ -116,6 +142,21 @@ class VDFUnit(base.DictUnit):
 
     def storevalues(self, output):
         self.storevalue(output, self.convert_target())
+
+    def storevalue(self, output, value, override_key=None, unset=False):
+        target = output
+        key = override_key if override_key is not None else str(self._unitid)
+        if unset:
+            del target[key]
+        else:
+            target[key] = value
+
+    def getvalue(self):
+        """Returns dictionary for serialization."""
+        result = {}
+        self.storevalues(result)
+        return result
+
 
 vdfTranslationBase = """"lang"
 {
@@ -183,6 +224,8 @@ def escape(string: str) -> str:
 #_vdf_regex = re.compile(r'^\s*\"(?P<key>.+?)(?:(?<!\\)\")\s+\"(?P<val>.*?)(?:(?<!\\)\")\s*(?:\[(?P<cond>[^\]\/]*)\])?\s*(?:\/+.*)?$', re.UNICODE)
 _vdf_regex = re.compile(r'^\s*\"(?P<key>.+?(?<!\\)(?:\\\\)*)(?:\")\s+\"(?P<val>.*?(?<!\\)(?:\\\\)*)(?:\")(?:\s*\[(?P<cond>[^\]\/]*)\])?(?P<comment>\s*\/+[^\r\n]*)?\s*$', re.UNICODE)
 
+_vdf_key_regex = re.compile(r'^(?P<key>[^\[\]]*)(?:\[((?P<cond>[^\[\]]*))\])?$', re.UNICODE)
+
 class VDFFileLine(object):
     def __init__(self, line):
         self.line = line
@@ -197,10 +240,10 @@ class VDFFileLine(object):
             self.value = unescape(matched.group('val'))
             self.posKey = matched.span('key')
             self.posValue = matched.span('val')
-            #self.effectiveKey = self.key
-            #if matched.group('cond') is not None:
-            #    self.effectiveKey += matched.group('cond')
             self.cond: str | None = matched.group('cond')
+            self.effectiveKey = self.key
+            if self.cond is not None:
+                self.effectiveKey += "[" + self.cond + "]"
             self.comment: str | None = matched.group('comment')
             self.posComment: tuple[int, int] | None = matched.span('comment')
 
@@ -218,9 +261,20 @@ class VDFFileLine(object):
         #self.refresh_regex()
 
     def set_key(self, new_key):
+        key_matched = _vdf_key_regex.match(new_key)
+        new_key = key_matched.group('key')
+        new_cond = key_matched.group('cond')
+
         new_key_escaped = escape(new_key)
         self.line = self.line[0 : self.posKey[0]] + new_key_escaped + self.line[self.posKey[1] : ]
+
         self.key = new_key
+        if new_cond is not None:
+            self.cond = new_cond
+        self.effectiveKey = self.key
+        if self.cond is not None:
+            self.effectiveKey += "[" + self.cond + "]"
+
         delta = (self.posKey[0] + len(new_key_escaped)) - self.posKey[1]
         self.posKey = ( self.posKey[0], self.posKey[0] + len(new_key_escaped) )
         self.posValue = ( self.posValue[0] + delta, self.posValue[1] + delta )
@@ -247,7 +301,7 @@ class VDFFileWrapper(object):
     def _addline_bottom(self, line):
         self._lines.append(line)
         if line.valid:
-            self._linesMap[line.key] = line
+            self._linesMap[line.effectiveKey] = line
 
     def _addline_sane(self, line):
         valid_lines = list(filter(lambda line: line.valid, self._lines))
@@ -256,7 +310,7 @@ class VDFFileWrapper(object):
         insert_at = (self._lines.index(valid_lines[-1])+1) if len(valid_lines) > 1 else ((self._lines.index(opening_lines[-1])+1) if len(opening_lines) else len(self._lines))
         self._lines.insert(insert_at, line)
         if line.valid:
-            self._linesMap[line.key] = line
+            self._linesMap[line.effectiveKey] = line
     
     def __getitem__(self, key: str):
         if key in self._linesMap:
@@ -286,7 +340,8 @@ class VDFFileWrapper(object):
         if key in self._linesMap:
             del self._linesMap[key]
 
-class VDFFile(base.DictStore):
+#class VDFFile(base.DictStore):
+class VDFFile(base.TranslationStore):
     """A Valve VDF file"""
 
     UnitClass = VDFUnit
@@ -374,6 +429,10 @@ class VDFFile(base.DictStore):
             self._original[source] = ""
         super().addunit(unit)
         return unit
+
+    def serialize_units(self, output):
+        for unit in self.unit_iter():
+            unit.storevalues(output)
 
 class VDFFileUTF16(VDFFile):
     Encoding = "UTF-16-LE"

@@ -14,14 +14,25 @@ class TestVDFFileLine:
     def test1(self):
         line = vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [$PS4]')
         assert line.cond == "$PS4"
+        assert line.effectiveKey == "SOME_KEY[$PS4]"
 
     def test2(self):
         line = vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [!$PS4]')
         assert line.cond == "!$PS4"
 
+    def test3(self):
+        line = vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [$PS4]')
+        line.set_key("SOME_OTHER_KEY")
+        assert line.key == "SOME_OTHER_KEY"
+        assert line.cond == "$PS4"
+        assert line.effectiveKey == "SOME_OTHER_KEY[$PS4]"
+        line.set_key("SOME_OTHER_KEY[$PS5]")
+        assert line.key == "SOME_OTHER_KEY"
+        assert line.cond == "$PS5"
+        assert line.effectiveKey == "SOME_OTHER_KEY[$PS5]"
+
 class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
     UnitClass = vdf.VDFUnit
-    print("aaaa")
 
     def test1(self):
         unit = self.UnitClass(vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE"'))
@@ -40,6 +51,14 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
         assert str(unit._unitid) == "SOME_OTHER_KEY"
         assert unit.getlocations() == ["SOME_OTHER_KEY"]
         assert unit.getvalue() == {"SOME_OTHER_KEY": "SOME_VALUE"}
+    
+    def test3_cond(self):
+        unit = self.UnitClass(vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [$PS4]'))
+        unit.set_unitid(self.UnitClass.IdClass([("key", "SOME_OTHER_KEY"), ("index", "$PS5")]))
+        assert unit._id == "SOME_OTHER_KEY[$PS5]"
+        assert str(unit._unitid) == "SOME_OTHER_KEY[$PS5]"
+        assert unit.getlocations() == ["SOME_OTHER_KEY[$PS5]"]
+        assert unit.getvalue() == {"SOME_OTHER_KEY[$PS5]": "SOME_VALUE"}
 
     def test4(self):
         unit = self.UnitClass(vdf.VDFFileLine(' "SOME_KEY" "SOME_VALUE"//comment'))
@@ -113,7 +132,7 @@ class TestVDFResourceUnit(test_monolingual.TestMonolingualUnit):
 
     def test_cond(self):
         unit = self.UnitClass(vdf.VDFFileLine('"SOME_KEY" "SOME_VALUE" [$PS4]'))
-        assert unit.getlocations() == ["SOME_KEY->$PS4"]
+        assert unit.getlocations() == ["SOME_KEY[$PS4]"]
 
 class TestVDFResourceStore(test_monolingual.TestMonolingualStore):
     StoreClass = vdf.VDFFile
@@ -163,11 +182,6 @@ class TestVDFResourceStore(test_monolingual.TestMonolingualStore):
         assert store._original["SOME_KEY"] == "SOME_OTHER_VALUE"
         assert bytes(store) == output_expected
 
-    #def test_empty(self):
-    #    store = self.StoreClass()
-    #    store.parse("{}")
-    #    assert bytes(store) == b"{}\n"
-
     def test_remove(self):
         store = self.StoreClass()
         input = """"lang"
@@ -177,7 +191,7 @@ class TestVDFResourceStore(test_monolingual.TestMonolingualStore):
 	{
 		//comment
 		"BEFORE_KEY" "before value"
-		"SOME_KEY"    "SOME_VALUE" //comment
+		"SOME_KEY"    "SOME_VALUE" //to be removed
 		"AFTER_KEY" "after value"
 
 		"AFTER_KEY2" "after value"
@@ -204,6 +218,15 @@ class TestVDFResourceStore(test_monolingual.TestMonolingualStore):
         store.removeunit(store.units[1])
         #assert bytes(store) == bytes(output_expected, "utf-8")
         assert bytes(store).decode() == output_expected
+
+    def test_empty(self):
+        store = self.StoreClass()
+        store.parse(vdf.vdfTranslationBase)
+        assert bytes(store).decode() == vdf.vdfTranslationBase
+
+    def test_create_base(self):
+        store = self.StoreClass()
+        assert bytes(store).decode() == vdf.vdfTranslationBase
 
     def test_create(self):
         store = self.StoreClass()
@@ -242,3 +265,27 @@ class TestVDFResourceStore(test_monolingual.TestMonolingualStore):
         store.parse(input)
         assert len(store.units) == 2
         assert bytes(store) == input
+
+    def test_with_conditional(self):
+        store = self.StoreClass()
+        input = """"lang"
+{
+	"Language" "english"
+	"Tokens"
+	{
+		//comment
+		"BEFORE_KEY" "before value"
+		"SOME_KEY"    "SOME_VALUE" //comment
+		"AFTER_KEY" "after value" [$PS4]
+
+		"AFTER_KEY2" "after value"
+	}
+}
+"""
+
+        store.parse(input)
+        assert len(store.units) == 4
+        assert bytes(store).decode() == input
+        #store.removeunit(store.units[1])
+        #assert bytes(store) == bytes(output_expected, "utf-8")
+        #assert bytes(store).decode() == output_expected
