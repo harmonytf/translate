@@ -22,14 +22,13 @@ jobs:
       matrix:
         requirements: [latest]
         python-version:
-        - '3.7'
         - '3.8'
         - '3.9'
         - '3.10'
         - '3.11'
         include:
         - requirements: minimal
-          python-version: '3.7'
+          python-version: '3.8'
 
     steps:
     - uses: actions/checkout@v3
@@ -39,8 +38,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: pip
         cache-dependency-path: requirements/*.txt
-    - name: Configure Fast APT Mirror
-      uses: vegardit/fast-apt-mirror.sh@v1
     - name: Install apt dependencies
       run: |
         sudo apt-get update
