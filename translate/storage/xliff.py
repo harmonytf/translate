@@ -506,16 +506,25 @@ class xliffunit(lisa.LISAunit):
         return uid
 
     def addlocation(self, location):
-        self.setid(location)
+        if ":" in location:
+            sourcefile, linenumber = location.rsplit(":", 1)
+            contexts = [("sourcefile", sourcefile), ("linenumber", linenumber)]
+        else:
+            contexts = [("sourcefile", location)]
+        self.createcontextgroup("", contexts, "location")
 
     def getlocations(self):
-        id_attr = str(self.xmlelement.get("id") or "")
-        # XLIFF files downloaded from PO projects in Pootle
-        # might have id equal to .source, so let's avoid
-        # that:
-        if id_attr and id_attr != self.source:
-            return [id_attr]
-        return []
+        """Returns a list of locations."""
+        locations = []
+        for contextgroup in self.getcontextgroupsbyattribute("purpose", "location"):
+            sourcefile = next((x for x in contextgroup if x[0] == "sourcefile"), None)
+            linenumber = next((x for x in contextgroup if x[0] == "linenumber"), None)
+            if sourcefile is not None and linenumber is not None:
+                locations.append(sourcefile[1] + ":" + linenumber[1])
+            elif sourcefile is not None:
+                locations.append(sourcefile[1])
+
+        return locations
 
     def createcontextgroup(self, name, contexts=None, purpose=None):
         """Add the context group to the trans-unit with contexts a list with
@@ -545,6 +554,27 @@ class xliffunit(lisa.LISAunit):
         # TODO: conbine name in query
         for group in grouptags:
             if group.get("name") == name:
+                contexts = group.iterdescendants(self.namespaced("context"))
+                pairs = []
+                for context in contexts:
+                    pairs.append(
+                        (
+                            context.get("context-type"),
+                            lisa.getText(
+                                context,
+                                getXMLspace(self.xmlelement, self._default_xml_space),
+                            ),
+                        )
+                    )
+                groups.append(pairs)  # not extend
+        return groups
+
+    def getcontextgroupsbyattribute(self, attributeName, attributeValue):
+        """Returns the contexts in the context groups with the specified attributeName and attributeValue"""
+        groups = []
+        grouptags = self.xmlelement.iterdescendants(self.namespaced("context-group"))
+        for group in grouptags:
+            if group.get(attributeName) == attributeValue:
                 contexts = group.iterdescendants(self.namespaced("context"))
                 pairs = []
                 for context in contexts:
