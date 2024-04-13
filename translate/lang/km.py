@@ -16,11 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""This module represents the Khmer language.
+"""
+This module represents the Khmer language.
 
 .. seealso:: :wp:`Khmer_language`
 """
-
 
 import re
 
@@ -33,14 +33,7 @@ class km(common.Common):
     khmerpunc = "។៕៖៘"
     """These marks are only used for Khmer."""
 
-    punctuation = "".join(
-        [
-            common.Common.commonpunc,
-            common.Common.quotes,
-            common.Common.miscpunc,
-            khmerpunc,
-        ]
-    )
+    punctuation = f"{common.Common.commonpunc}{common.Common.quotes}{common.Common.miscpunc}{khmerpunc}"
 
     sentenceend = "!?…។៕៘"
 

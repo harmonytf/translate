@@ -19,9 +19,12 @@
 
 """Module for handling Android String and Plurals resource files."""
 
+from __future__ import annotations
+
 import copy
 import os
 import re
+from xml.parsers.expat import XML_PARAM_ENTITY_PARSING_NEVER, ParserCreate
 
 from lxml import etree
 
@@ -30,29 +33,144 @@ from translate.misc.multistring import multistring
 from translate.storage import base, lisa
 
 EOF = None
-WHITESPACE = " \n\t"  # Whitespace that we collapse.
+WHITESPACE = {" ", "\n", "\t"}  # Whitespace that we collapse.
+ESCAPE_NEWLINE = {"n", "N"}
+ESCAPE_TAB = {"t", "T"}
+ESCAPE_PLAIN = {" ", '"', "'", "@", "?"}
 MULTIWHITESPACE = re.compile("[ \n\t]{2}(?!\\\\n)")
+
+ESCAPE_TRANSLATE = str.maketrans(
+    {
+        "\\": "\\\\",
+        # This will add non intrusive real newlines to
+        # ones in translation improving readability of result
+        "\n": "\n\\n",
+        "\t": "\\t",
+        "'": "\\'",
+        '"': '\\"',
+    }
+)
+
+
+class DecodingXMLParser:
+    """
+    XML parser that processes non CDATA strings.
+
+    - all XML markup from given depth is output as is
+    - CDATA elements are output as is
+    - process_string() is called on all other textual content
+    """
+
+    EMIT_DEPTH = 1
+    FOREGIN_DTD = True
+
+    def __init__(self, text: str):
+        self.text = text.encode("utf-8")
+        self.output = []
+        self.emit_start = None
+        self.decoded_emit = None
+        self.character_data = False
+        self.raw_string = True
+        self.depth = 0
+        self.parser = parser = ParserCreate()
+        if self.FOREGIN_DTD:
+            parser.UseForeignDTD(self.FOREGIN_DTD)
+        parser.SetParamEntityParsing(XML_PARAM_ENTITY_PARSING_NEVER)
+        parser.StartElementHandler = self.StartElementHandler
+        parser.EndElementHandler = self.EndElementHandler
+        parser.CharacterDataHandler = self.CharacterDataHandler
+        parser.StartCdataSectionHandler = self.StartCdataSectionHandler
+        parser.EndCdataSectionHandler = self.EndCdataSectionHandler
+        parser.DefaultHandler = self.DefaultHandler
+
+    @staticmethod
+    def process_string(text: str) -> str:
+        return AndroidResourceUnit.unescape(text, strip=False)
+
+    def emit(self):
+        if self.emit_start is not None:
+            text = self.text[self.emit_start : self.parser.CurrentByteIndex].decode(
+                "utf-8"
+            )
+            if not self.raw_string:
+                text = self.process_string(text)
+            self.output.append(text)
+            self.emit_start = None
+        self.character_data = False
+        self.raw_string = True
+
+    def StartElementHandler(self, _name, _attributes):
+        self.emit()
+        if self.depth >= self.EMIT_DEPTH:
+            self.emit_start = self.parser.CurrentByteIndex
+        self.depth += 1
+
+    def EndElementHandler(self, _name):
+        self.emit()
+        if self.depth >= self.EMIT_DEPTH:
+            self.emit_start = self.parser.CurrentByteIndex
+        self.depth -= 1
+
+    def CharacterDataHandler(self, _data):
+        if not self.character_data:
+            self.emit()
+            self.emit_start = self.parser.CurrentByteIndex
+            self.raw_string = False
+
+    def StartCdataSectionHandler(self):
+        self.emit()
+        self.character_data = True
+        self.emit_start = self.parser.CurrentByteIndex
+
+    def EndCdataSectionHandler(self):
+        self.character_data = False
+
+    def DefaultHandler(self, _data):
+        if self.depth >= self.EMIT_DEPTH:
+            self.emit()
+            self.emit_start = self.parser.CurrentByteIndex
+
+    def parse(self) -> str:
+        self.parser.Parse(self.text, True)
+        if self.depth >= self.EMIT_DEPTH:
+            self.emit()
+        return "".join(self.output)
+
+
+class EncodingXMLParser(DecodingXMLParser):
+    EMIT_DEPTH = 0
+    FOREGIN_DTD = False
+
+    @staticmethod
+    def process_string(text: str) -> str:
+        return AndroidResourceUnit.escape(text, quote_wrapping_whitespaces=False)
+
+    def parse(self) -> str:
+        self.emit_start = 0
+        return super().parse()
 
 
 class AndroidResourceUnit(base.TranslationUnit):
     """A single entry in the Android String resource file."""
 
+    SINGULAR_TAG = "string"
+    PLURAL_TAG = "plurals"
+
     @classmethod
     def createfromxmlElement(cls, element):
         term = None
         # Actually this class supports only plurals and string tags
-        if element.tag in ("plurals", "string"):
+        if element.tag in (cls.PLURAL_TAG, cls.SINGULAR_TAG):
             term = cls(None, xmlelement=element)
         return term
 
     def __init__(self, source, empty=False, xmlelement=None, **kwargs):
         if xmlelement is not None:
             self.xmlelement = xmlelement
+        elif self.hasplurals(source):
+            self.xmlelement = etree.Element(self.PLURAL_TAG)
         else:
-            if self.hasplurals(source):
-                self.xmlelement = etree.Element("plurals")
-            else:
-                self.xmlelement = etree.Element("string")
+            self.xmlelement = etree.Element(self.SINGULAR_TAG)
         if source is not None:
             self.setid(source)
         super().__init__(source)
@@ -77,27 +195,33 @@ class AndroidResourceUnit(base.TranslationUnit):
         """
         Remove escaping from Android resource.
 
-        Code stolen from android2po
+        Code is based on android2po
         <https://github.com/miracle2k/android2po>
         """
         # Return text for empty elements
         if text is None:
             return ""
 
+        # Mirror globals into locals for faster lookups
+        eof = EOF
+        whitespace = WHITESPACE
+        escape_newline = ESCAPE_NEWLINE
+        escape_tab = ESCAPE_TAB
+        escape_plain = ESCAPE_PLAIN
+
         # We need to collapse multiple whitespace while paying
         # attention to Android's quoting and escaping.
         space_count = 0
         active_quote = False
-        active_percent = False
         active_escape = False
         i = 0
-        text = list(text) + [EOF]
+        text = [*text, eof]
         while i < len(text):
             c = text[i]
 
             if not active_escape:
                 # Handle whitespace collapsing
-                if c is not EOF and c in WHITESPACE:
+                if c is not eof and c in whitespace:
                     space_count += 1
                 elif space_count >= 1:
                     # Remove sequential whitespace; Pay attention: We
@@ -106,12 +230,12 @@ class AndroidResourceUnit(base.TranslationUnit):
                     # quotes, e.g. we reach eof while a quote is still
                     # open, we *do* collapse that trailing part; this is
                     # how Android does it, for some reason.
-                    if not active_quote or c is EOF:
+                    if not active_quote or c is eof:
                         # Replace by a single space, will get rid of
                         # non-significant newlines/tabs etc.
                         text[i - space_count : i] = " "
                         i -= space_count - 1
-                        if strip and (i == 1 or c is EOF):
+                        if strip and (i == 1 or c is eof):
                             del text[i - 1]
                     space_count = 0
                 else:
@@ -123,13 +247,6 @@ class AndroidResourceUnit(base.TranslationUnit):
                 del text[i]
                 i -= 1
 
-            # If the string is run through a formatter, it will have
-            # percentage signs for String.format
-            if c == "%" and not active_escape:
-                active_percent = not active_percent
-            elif not active_escape and active_percent:
-                active_percent = False
-
             # Handle escapes
             if c == "\\":
                 if not active_escape:
@@ -140,67 +257,58 @@ class AndroidResourceUnit(base.TranslationUnit):
                     del text[i]
                     i -= 1
                     active_escape = False
-            else:
-                if active_escape:
-                    # Handle the limited amount of escape codes
-                    # that we support.
-                    # TODO: What about \r, or \r\n?
-                    if c is EOF:
-                        # Basically like any other char, but put
-                        # this first so we can use the ``in`` operator
-                        # in the clauses below without issue.
-                        pass
-                    elif c in ("n", "N"):
-                        # Remove whitespace just before newline. Most likely this is result of
-                        # having real newline in the XML in front of \n.
-                        if i >= 2 and text[i - 2] == " ":
-                            offset = 2
-                        else:
-                            offset = 1
-                        text[i - offset : i + 1] = "\n"  # an actual newline
-                        i -= offset
-                    elif c in ("t", "T"):
-                        text[i - 1 : i + 1] = "\t"  # an actual tab
-                        i -= 1
-                    elif c == " ":
-                        text[i - 1 : i + 1] = " "  # an actual space
-                        i -= 1
-                    elif c in "\"'@?":
-                        text[i - 1 : i] = ""  # remove the backslash
-                        i -= 1
-                    elif c == "u":
-                        # Unicode sequence. Android is nice enough to deal
-                        # with those in a way which let's us just capture
-                        # the next 4 characters and raise an error if they
-                        # are not valid (rather than having to use a new
-                        # state to parse the unicode sequence).
-                        # Exception: In case we are at the end of the
-                        # string, we support incomplete sequences by
-                        # prefixing the missing digits with zeros.
-                        # Note: max(len()) is needed in the slice due to
-                        # trailing ``None`` element.
-                        max_slice = min(i + 5, len(text) - 1)
-                        codepoint_str = "".join(text[i + 1 : max_slice])
-                        if len(codepoint_str) < 4:
-                            codepoint_str = (
-                                "0" * (4 - len(codepoint_str)) + codepoint_str
-                            )
-                        try:
-                            # We can't trust int() to raise a ValueError,
-                            # it will ignore leading/trailing whitespace.
-                            if not codepoint_str.isalnum():
-                                raise ValueError(codepoint_str)
-                            codepoint = chr(int(codepoint_str, 16))
-                        except ValueError:
-                            raise ValueError("bad unicode escape sequence")
+            elif active_escape:
+                # Handle the limited amount of escape codes
+                # that we support.
+                # TODO: What about \r, or \r\n?
+                if c is eof:
+                    # Basically like any other char, but put
+                    # this first so we can use the ``in`` operator
+                    # in the clauses below without issue.
+                    pass
+                elif c in escape_newline:
+                    # Remove whitespace just before newline. Most likely this is result of
+                    # having real newline in the XML in front of \n.
+                    offset = 2 if i >= 2 and text[i - 2] == " " else 1
+                    text[i - offset : i + 1] = "\n"  # an actual newline
+                    i -= offset
+                elif c in escape_tab:
+                    text[i - 1 : i + 1] = "\t"  # an actual tab
+                    i -= 1
+                elif c in escape_plain:
+                    text[i - 1 : i] = ""  # remove the backslash
+                    i -= 1
+                elif c == "u":
+                    # Unicode sequence. Android is nice enough to deal
+                    # with those in a way which let's us just capture
+                    # the next 4 characters and raise an error if they
+                    # are not valid (rather than having to use a new
+                    # state to parse the unicode sequence).
+                    # Exception: In case we are at the end of the
+                    # string, we support incomplete sequences by
+                    # prefixing the missing digits with zeros.
+                    # Note: max(len()) is needed in the slice due to
+                    # trailing ``None`` element.
+                    max_slice = min(i + 5, len(text) - 1)
+                    codepoint_str = "".join(text[i + 1 : max_slice])
+                    if len(codepoint_str) < 4:
+                        codepoint_str = "0" * (4 - len(codepoint_str)) + codepoint_str
+                    try:
+                        # We can't trust int() to raise a ValueError,
+                        # it will ignore leading/trailing whitespace.
+                        if not codepoint_str.isalnum():
+                            raise ValueError(codepoint_str)
+                        codepoint = chr(int(codepoint_str, 16))
+                    except ValueError:
+                        raise ValueError("bad unicode escape sequence")
 
-                        text[i - 1 : max_slice] = codepoint
-                        i -= 1
-                    else:
-                        # All others, remove, like Android does as well.
-                        text[i - 1 : i + 1] = ""
-                        i -= 1
-                    active_escape = False
+                    text[i - 1 : max_slice] = codepoint
+                    i -= 1
+                else:
+                    # All others, remove, like Android does as well.
+                    text[i - 1 : i + 1] = ""
+                    i -= 1
+                active_escape = False
 
             i += 1
 
@@ -211,8 +319,12 @@ class AndroidResourceUnit(base.TranslationUnit):
     def xml_escape_space(matchobj):
         return matchobj.group(0).replace("  ", r" \u0020")
 
-    def escape(self, text, quote_wrapping_whitespaces=True):
-        """Escape all the characters which need to be escaped in an Android XML
+    @classmethod
+    def escape(
+        cls, text: str | None, quote_wrapping_whitespaces: bool = True
+    ) -> str | None:
+        """
+        Escape all the characters which need to be escaped in an Android XML
         file.
 
         :param text: Text to escape
@@ -221,30 +333,27 @@ class AndroidResourceUnit(base.TranslationUnit):
                double quotes.
         """
         if text is None:
-            return
+            return None
         if len(text) == 0:
             return ""
-        text = text.replace("\\", "\\\\")
-        # This will add non intrusive real newlines to
-        # ones in translation improving readability of result
-        text = text.replace("\n", "\n\\n")
-        text = text.replace("\t", "\\t")
-        text = text.replace("'", "\\'")
-        text = text.replace("?", "\\?")
-        text = text.replace('"', '\\"')
 
-        # @ needs to be escaped at start
-        if text.startswith("@"):
-            text = "\\@" + text[1:]
+        # Escape XML chars and whitespace
+        text = text.translate(ESCAPE_TRANSLATE)
+
+        # @ and ? needs to be escaped at start as this would be interpreted
+        # as string/style references
+        if text.startswith(("@", "?")):
+            text = f"\\{text}"
+
         # Quote strings with more whitespace
-        multispace = MULTIWHITESPACE.findall(text)
+        multispace = MULTIWHITESPACE.search(text)
         if quote_wrapping_whitespaces and (
             text[0] in WHITESPACE or text[-1] in WHITESPACE or multispace
         ):
             return '"%s"' % text
         # In xml multispace
         if not quote_wrapping_whitespaces and multispace:
-            return MULTIWHITESPACE.sub(self.xml_escape_space, text)
+            return MULTIWHITESPACE.sub(cls.xml_escape_space, text)
 
         return text
 
@@ -258,33 +367,9 @@ class AndroidResourceUnit(base.TranslationUnit):
         if len(xmltarget) == 0:
             # There are no html markups, so unescaping it as plain text.
             return self.unescape(xmltarget.text)
-        else:
-            # There are html markups, so clone it to perform unescaping for all elements.
-            cloned_target = copy.deepcopy(xmltarget)
 
-            # Unescaping texts.
-            if cloned_target.text is not None:
-                cloned_target.text = self.unescape(cloned_target.text, False)
-            for xmlelement in cloned_target.iterdescendants():
-                if xmlelement.text is not None and xmlelement.tag is not etree.Entity:
-                    xmlelement.text = self.unescape(xmlelement.text, False)
-                if xmlelement.tail is not None:
-                    xmlelement.tail = self.unescape(xmlelement.tail, False)
-
-            # Grab root text (using a temporary xml element for text escaping)
-            if cloned_target.text is not None:
-                tmp_element = etree.Element("t")
-                tmp_element.text = cloned_target.text
-                target = etree.tostring(tmp_element, encoding="unicode")[3:-4]
-            else:
-                target = ""
-
-            # Include markup as well
-            target += "".join(
-                etree.tostring(child, encoding="unicode")
-                for child in cloned_target.iterchildren()
-            )
-            return target
+        parser = DecodingXMLParser(etree.tostring(xmltarget, encoding="unicode"))
+        return parser.parse()
 
     def set_xml_text_plain(self, target, xmltarget):
         # Remove possible old elements
@@ -314,27 +399,22 @@ class AndroidResourceUnit(base.TranslationUnit):
                 "</resources>", f"<string>{target}</string></resources>"
             )
             try:
-                newstring = etree.fromstring(newstring, parser)[0]
+                etree.fromstring(newstring, parser)
             except Exception:
                 self.set_xml_text_plain(target, xmltarget)
             else:
-                # Escape all text parts.
-                if newstring.text is not None:
-                    newstring.text = self.escape(newstring.text, False)
-                for x in newstring.iterdescendants():
-                    if x.text is not None and x.tag is not etree.Entity:
-                        x.text = self.escape(x.text, False)
-                    if x.tail is not None:
-                        x.tail = self.escape(x.tail, False)
-
+                # Escape text parts
+                encoding_parser = EncodingXMLParser(newstring)
+                newstring = encoding_parser.parse()
+                newtree = etree.fromstring(newstring, parser)[0]
                 # Update text
-                xmltarget.text = newstring.text
+                xmltarget.text = newtree.text
 
                 # Remove old elements
                 for x in xmltarget.iterchildren():
                     xmltarget.remove(x)
                 # Add new elements
-                for x in newstring.iterchildren():
+                for x in newtree.iterchildren():
                     xmltarget.append(x)
         else:
             self.set_xml_text_plain(target, xmltarget)
@@ -356,7 +436,7 @@ class AndroidResourceUnit(base.TranslationUnit):
 
     @property
     def target(self):
-        if self.xmlelement.tag != "plurals":
+        if self.xmlelement.tag != self.PLURAL_TAG:
             return self.get_xml_text_value(self.xmlelement)
         plurals = {
             entry.get("quantity"): self.get_xml_text_value(entry)
@@ -369,25 +449,15 @@ class AndroidResourceUnit(base.TranslationUnit):
     def target(self, target):
         if self.hasplurals(self.source) or self.hasplurals(target):
             # Fix the root tag if mismatching
-            if self.xmlelement.tag != "plurals":
+            if self.xmlelement.tag != self.PLURAL_TAG:
                 old_id = self.getid()
-                self.xmlelement = etree.Element("plurals")
+                self.xmlelement = etree.Element(self.PLURAL_TAG)
                 self.setid(old_id)
 
             plural_tags = self.get_plural_tags()
 
-            # Get string list to handle, wrapping non multistring/list targets into a list.
-            if isinstance(target, multistring):
-                plural_strings = target.strings
-            elif isinstance(target, list):
-                plural_strings = target
-            else:
-                plural_strings = [target]
-
             # Sync plural_strings elements to plural_tags count.
-            if len(plural_strings) < len(plural_tags):
-                plural_strings += [""] * (len(plural_tags) - len(plural_strings))
-            plural_strings = plural_strings[: len(plural_tags)]
+            plural_strings = self.sync_plural_count(target, plural_tags)
 
             # Rebuild plurals.
             for entry in self.xmlelement.iterchildren():
@@ -399,7 +469,7 @@ class AndroidResourceUnit(base.TranslationUnit):
             # of Android builts with broken plurals handling.
             if "other" not in plural_tags and "many" in plural_tags:
                 # Create copy here to avoid modifications to laguage.data
-                plural_tags = plural_tags + ["other"]
+                plural_tags = [*plural_tags, "other"]
                 plural_strings.append(plural_strings[-1])
 
             for plural_tag, plural_string in zip(plural_tags, plural_strings):
@@ -409,9 +479,9 @@ class AndroidResourceUnit(base.TranslationUnit):
                 self.xmlelement.append(item)
         else:
             # Fix the root tag if mismatching
-            if self.xmlelement.tag != "string":
+            if self.xmlelement.tag != self.SINGULAR_TAG:
                 old_id = self.getid()
-                self.xmlelement = etree.Element("string")
+                self.xmlelement = etree.Element(self.SINGULAR_TAG)
                 self.setid(old_id)
 
             self.set_xml_text_value(target, self.xmlelement)
@@ -439,8 +509,7 @@ class AndroidResourceUnit(base.TranslationUnit):
                     prevSibling = prevSibling.getprevious()
 
             return "\n".join(comments)
-        else:
-            return super().getnotes(origin)
+        return super().getnotes(origin)
 
     def removenotes(self, origin=None):
         if (self.xmlelement is not None) and (self.xmlelement.getparent is not None):
@@ -459,11 +528,7 @@ class AndroidResourceUnit(base.TranslationUnit):
 
     @staticmethod
     def hasplurals(thing):
-        if isinstance(thing, multistring):
-            return True
-        elif isinstance(thing, list):
-            return True
-        return False
+        return isinstance(thing, (multistring, list))
 
 
 class AndroidResourceFile(lisa.LISAfile):
@@ -481,14 +546,15 @@ class AndroidResourceFile(lisa.LISAfile):
     XMLuppercaseEncoding = False
 
     def initbody(self):
-        """Initialises self.body so it never needs to be retrieved from the XML
+        """
+        Initialises self.body so it never needs to be retrieved from the XML
         again.
         """
         self.namespace = self.document.getroot().nsmap.get(None, None)
         self.body = self.document.getroot()
 
     def parse(self, xml):
-        """Populates this object from the given xml string"""
+        """Populates this object from the given xml string."""
         if not hasattr(self, "filename"):
             self.filename = getattr(xml, "name", "")
         if hasattr(xml, "read"):
@@ -526,7 +592,8 @@ class AndroidResourceFile(lisa.LISAfile):
         return target_lang
 
     def addunit(self, unit, new=True):
-        """Adds unit to the document
+        """
+        Adds unit to the document.
 
         In addition to the standard addunit, it also tries to move
         namespace definitions to the top <resources> element.
@@ -565,3 +632,11 @@ class AndroidResourceFile(lisa.LISAfile):
     def removeunit(self, unit):
         unit.removenotes()
         super().removeunit(unit)
+
+
+class MOKOResourceUnit(AndroidResourceUnit):
+    PLURAL_TAG = "plural"
+
+
+class MOKOResourceFile(AndroidResourceFile):
+    UnitClass = MOKOResourceUnit

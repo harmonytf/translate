@@ -16,11 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""This module represents the Chinese language (traditional).
+"""
+This module represents the Chinese language (traditional).
 
 .. seealso:: :wp:`Chinese_language`
 """
-
 
 from translate.lang.zh import zh
 

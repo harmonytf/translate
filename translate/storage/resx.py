@@ -21,7 +21,10 @@
 
 from lxml import etree
 
-from translate.misc.xml_helpers import setXMLspace
+from translate.misc.xml_helpers import (
+    safely_set_text,
+    setXMLspace,
+)
 from translate.storage import lisa
 from translate.storage.placeables import general
 
@@ -37,10 +40,9 @@ class RESXUnit(lisa.LISAunit):
 
     def createlanguageNode(self, lang, text, purpose):
         """Returns an xml Element setup with given parameters."""
-
         langset = etree.Element(self.namespaced(self.languageNode))
 
-        langset.text = text
+        safely_set_text(langset, text)
         return langset
 
     def _gettargetnode(self):
@@ -67,10 +69,10 @@ class RESXUnit(lisa.LISAunit):
             return
         targetnode = self._gettargetnode()
         targetnode.clear()
-        targetnode.text = target or ""
+        safely_set_text(targetnode, target or "")
 
     def addnote(self, text, origin=None, position="append"):
-        """Add a note specifically in the appropriate "comment" tag"""
+        """Add a note specifically in the appropriate "comment" tag."""
         current_notes = self.getnotes(origin)
         self.removenotes(origin)
         note = etree.SubElement(self.xmlelement, self.namespaced("comment"))
@@ -78,11 +80,13 @@ class RESXUnit(lisa.LISAunit):
         if position == "append":
             if current_notes.strip() in text_stripped:
                 # Don't add duplicate comments
-                note.text = text_stripped
+                safely_set_text(note, text_stripped)
             else:
-                note.text = "\n".join(filter(None, [current_notes, text_stripped]))
+                safely_set_text(
+                    note, "\n".join(filter(None, [current_notes, text_stripped]))
+                )
         else:
-            note.text = text_stripped
+            safely_set_text(note, text_stripped)
         if note.text:
             # Correct the indent of <comment> by updating the tail of
             # the preceding <value> element
@@ -223,6 +227,8 @@ class RESXFile(lisa.LISAfile):
             unit.xmlelement.text = "\n    "
         return unit
 
-    def serialize_hook(self, treestring):
+    def serialize_hook(self, treestring: str) -> bytes:
         # Additional space on empty tags same as Visual Studio
-        return treestring.replace(b"/>", b" />")
+        return super().serialize_hook(
+            treestring.replace("/>", " />").replace("\n", "\r\n")
+        )

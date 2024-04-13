@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from pytest import raises
+from pytest import mark, raises
 
 from translate.misc.multistring import multistring
 from translate.storage import base, jsonl10n
@@ -56,6 +56,46 @@ JSON_I18NEXT_V4_FIXED = """{
     "keyPluralMultipleEgArabic_few": "the plural form 3",
     "keyPluralMultipleEgArabic_many": "the plural form 4",
     "keyPluralMultipleEgArabic_other": "the plural form 5"
+}
+"""
+
+JSON_FLAT_I18NEXT_V4 = """{
+    "key": "value",
+    "keyDeep.inner": "value",
+    "keyPluralSimple_one": "the singular",
+    "keyPluralSimple_other": "the plural",
+    "keyPluralMultipleEgArabic_zero": "the plural form 0",
+    "keyPluralMultipleEgArabic_one": "the plural form 1",
+    "keyPluralMultipleEgArabic_two": "the plural form 2",
+    "keyPluralMultipleEgArabic_few": "the plural form 3",
+    "keyPluralMultipleEgArabic_many": "the plural form 4",
+    "keyPluralMultipleEgArabic_other": "the plural form 5"
+}
+"""
+
+JSON_FLAT_I18NEXT_V4_FIXED = """{
+    "key": "value",
+    "keyDeep.inner": "value",
+    "keyPluralSimple_zero": "",
+    "keyPluralSimple_one": "the singular",
+    "keyPluralSimple_two": "",
+    "keyPluralSimple_few": "",
+    "keyPluralSimple_many": "",
+    "keyPluralSimple_other": "the plural",
+    "keyPluralMultipleEgArabic_zero": "the plural form 0",
+    "keyPluralMultipleEgArabic_one": "the plural form 1",
+    "keyPluralMultipleEgArabic_two": "the plural form 2",
+    "keyPluralMultipleEgArabic_few": "the plural form 3",
+    "keyPluralMultipleEgArabic_many": "the plural form 4",
+    "keyPluralMultipleEgArabic_other": "the plural form 5"
+}
+"""
+
+JSON_FLAT_I18NEXT_V4_PLURAL = b"""{
+    "key": "value",
+    "keyDeep.inner": "value",
+    "keyPluralSimple": "Ahoj",
+    "keyPluralMultipleEgArabic": "Nazdar"
 }
 """
 
@@ -649,6 +689,51 @@ class TestJSONNestedResourceStore(test_monolingual.TestMonolingualUnit):
         assert len(store.units) == 2
         assert bytes(store).decode() == data
 
+    def test_add_other(self):
+        jsontext = """{
+    "simple.key": "source"
+}
+"""
+        store = self.StoreClass()
+        store.parse(jsontext)
+
+        assert len(store.units) == 1
+        assert store.units[0].source == "source"
+        assert store.units[0].getid() == ".simple.key"
+
+        assert bytes(store).decode() == jsontext
+
+        newstore = self.StoreClass()
+        newstore.addunit(store.units[0])
+
+        assert bytes(newstore).decode() == jsontext
+
+    @mark.parametrize(
+        ("id_string", "expected"),
+        [
+            ("[0]", [("index", 0)]),
+            ("test[0]", [("key", "test"), ("index", 0)]),
+            (
+                "test[0][1][2][3]",
+                [
+                    ("key", "test"),
+                    ("index", 0),
+                    ("index", 1),
+                    ("index", 2),
+                    ("index", 3),
+                ],
+            ),
+            ("[test]selection", [("key", "[test]selection")]),
+            ("[test][0]selection", [("key", "[test][0]selection")]),
+            ("[0][test]selection", [("index", 0), ("key", "[test]selection")]),
+            ("", [("key", "")]),
+        ],
+    )
+    def test_from_string(self, id_string, expected):
+        id_class = self.StoreClass.UnitClass.IdClass
+        from_string = id_class.from_string
+        assert from_string(id_string) == id_class(expected)
+
 
 class TestWebExtensionUnit(test_monolingual.TestMonolingualUnit):
     UnitClass = jsonl10n.WebExtensionJsonUnit
@@ -883,9 +968,103 @@ class TestGoTextJsonFile(test_monolingual.TestMonolingualStore):
             '"other": {\n                            "msg": ""' in bytes(store).decode()
         )
 
+    def test_case_no_msg(self):
+        store = self.StoreClass()
+        store.parse(
+            """{
+    "language": "en-US",
+    "messages": [
+        {
+            "id": "{N} more files remaining!",
+            "key": "%d more files remaining!",
+            "message": "{N} more files remaining!",
+            "translation": {
+                "select": {
+                    "feature": "plural",
+                    "cases": {
+                        "one": "One file remaining!",
+                        "other": "There are {N} more files remaining!"
+                    }
+                }
+            }
+        }
+    ]
+}
+"""
+        )
+
+        assert len(store.units) == 1
+        assert store.units[0].target == multistring(
+            ["One file remaining!", "There are {N} more files remaining!"]
+        )
+
+        assert (
+            bytes(store).decode()
+            == """{
+    "language": "en-US",
+    "messages": [
+        {
+            "id": "{N} more files remaining!",
+            "message": "{N} more files remaining!",
+            "key": "%d more files remaining!",
+            "translation": {
+                "select": {
+                    "feature": "plural",
+                    "cases": {
+                        "one": {
+                            "msg": "One file remaining!"
+                        },
+                        "other": {
+                            "msg": "There are {N} more files remaining!"
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
+"""
+        )
+
+    def test_complex_id(self):
+        text = """{
+    "language": "en-US",
+    "messages": [
+        {
+            "id": [
+                "msgOutOfOrder",
+                "{Device} is out of order!"
+            ],
+            "message": "{Device} is out of order!",
+            "key": "%s is out of order!",
+            "translation": ""
+        },
+        {
+            "id": "[DEBUG] msg",
+            "message": "[DEBUG] msg",
+            "key": "[DEBUG] msg",
+            "translation": ""
+        }
+    ]
+}
+"""
+        store = self.StoreClass()
+        store.parse(text)
+
+        assert len(store.units) == 2
+        assert (
+            store.units[0].getid() == "['msgOutOfOrder', '{Device} is out of order!']"
+        )
+        assert store.units[1].getid() == "[DEBUG] msg"
+
+        assert bytes(store).decode() == text
+
 
 class TestI18NextV4Store(test_monolingual.TestMonolingualStore):
     StoreClass = jsonl10n.I18NextV4File
+    DeepUnpluralizedJson = JSON_I18NEXT_PLURAL
+    PartiallyPluralizedJson = JSON_I18NEXT_V4
+    CorrectlyPluralizedJson = JSON_I18NEXT_V4_FIXED
 
     def test_serialize(self):
         store = self.StoreClass()
@@ -900,13 +1079,13 @@ class TestI18NextV4Store(test_monolingual.TestMonolingualStore):
     def test_units(self):
         store = self.StoreClass()
         store.targetlanguage = "ar"
-        store.parse(JSON_I18NEXT_V4)
+        store.parse(self.PartiallyPluralizedJson)
         assert len(store.units) == 4
 
     def test_plurals(self):
         store = self.StoreClass()
         store.targetlanguage = "ar"
-        store.parse(JSON_I18NEXT_V4)
+        store.parse(self.PartiallyPluralizedJson)
 
         # Remove plurals
         store.units[2].target = "Ahoj"
@@ -914,7 +1093,7 @@ class TestI18NextV4Store(test_monolingual.TestMonolingualStore):
         out = BytesIO()
         store.serialize(out)
 
-        assert out.getvalue() == JSON_I18NEXT_PLURAL
+        assert out.getvalue() == self.DeepUnpluralizedJson
 
         # Bring back plurals
         store.settargetlanguage("ar")
@@ -942,7 +1121,7 @@ class TestI18NextV4Store(test_monolingual.TestMonolingualStore):
         out = BytesIO()
         store.serialize(out)
 
-        assert out.getvalue().decode() == JSON_I18NEXT_V4_FIXED
+        assert out.getvalue().decode() == self.CorrectlyPluralizedJson
 
     def test_nested_array(self):
         store = self.StoreClass()
@@ -1019,6 +1198,13 @@ class TestI18NextV4Store(test_monolingual.TestMonolingualStore):
         ]
 
 
+class TestFlatI18NextV4Store(TestI18NextV4Store):
+    StoreClass = jsonl10n.FlatI18NextV4File
+    DeepUnpluralizedJson = JSON_FLAT_I18NEXT_V4_PLURAL
+    PartiallyPluralizedJson = JSON_FLAT_I18NEXT_V4
+    CorrectlyPluralizedJson = JSON_FLAT_I18NEXT_V4_FIXED
+
+
 class TestGoI18NJsonFile(test_monolingual.TestMonolingualStore):
     StoreClass = jsonl10n.GoI18NJsonFile
 
@@ -1041,6 +1227,11 @@ class TestGoI18NJsonFile(test_monolingual.TestMonolingualStore):
         store.units[0].target = multistring(["{{.count}} tag"])
 
         assert '"other": ""' in bytes(store).decode()
+
+    def test_invalid(self):
+        store = self.StoreClass()
+        with raises(ValueError):
+            store.parse(JSON_I18NEXT_PLURAL)
 
 
 class TestGoI18NV2JsonFile(test_monolingual.TestMonolingualStore):
@@ -1083,6 +1274,23 @@ class TestGoI18NV2JsonFile(test_monolingual.TestMonolingualStore):
 
         assert bytes(store).decode() == JSON_GOI18N_V2
 
+    def test_plurals_blank(self):
+        store = self.StoreClass()
+        store.settargetlanguage("ar")
+        store.parse(JSON_GOI18N_V2)
+        # Remove one of plurals
+        store.units[1].target = multistring(
+            [
+                "the plural form 0",
+                "the plural form 1",
+                "the plural form 2",
+                "the plural form 3",
+                "the plural form 4",
+            ]
+        )
+
+        assert bytes(store).decode() == JSON_GOI18N_V2.replace("the plural form 5", "")
+
     def test_plurals_missing(self):
         store = self.StoreClass()
         store.parse(JSON_GOI18N_V2_SIMPLE)
@@ -1104,6 +1312,11 @@ class TestGoI18NV2JsonFile(test_monolingual.TestMonolingualStore):
 
         assert bytes(store).decode() == JSON_GOI18N_V2_SIMPLE
 
+    def test_invalid(self):
+        store = self.StoreClass()
+        with raises(ValueError):
+            store.parse(JSON_I18NEXT_PLURAL)
+
 
 class TestARBJsonFile(test_monolingual.TestMonolingualStore):
     StoreClass = jsonl10n.ARBJsonFile
@@ -1119,3 +1332,39 @@ class TestARBJsonFile(test_monolingual.TestMonolingualStore):
         assert store.units[3].target == "Done"
 
         assert bytes(store).decode() == JSON_ARB.decode()
+
+
+JSON_FORMATJS = """{
+    "hak27d": {
+        "defaultMessage": "Control Panel",
+        "description": "title of control panel section"
+    },
+    "haqsd": {
+        "defaultMessage": "Delete user {name}",
+        "description": "delete button"
+    },
+    "19hjs": {
+        "defaultMessage": "New Password",
+        "description": "placeholder text"
+    },
+    "explicit-id": {
+        "defaultMessage": "Confirm Password",
+        "description": "placeholder text"
+    }
+}
+"""
+
+
+class TestFormatJSJsonFile(test_monolingual.TestMonolingualStore):
+    StoreClass = jsonl10n.FormatJSJsonFile
+
+    def test_roundtrip(self):
+        store = self.StoreClass()
+        store.parse(JSON_FORMATJS)
+
+        assert len(store.units) == 4
+        assert store.units[3].getid() == "explicit-id"
+        assert store.units[3].target == "Confirm Password"
+        assert store.units[3].getnotes() == "placeholder text"
+
+        assert bytes(store).decode() == JSON_FORMATJS

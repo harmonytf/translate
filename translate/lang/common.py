@@ -16,7 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""This module contains all the common features for languages.
+"""
+This module contains all the common features for languages.
 
 Supported features:
 
@@ -57,7 +58,6 @@ TODOs and Ideas for possible features:
 
   - phrases
 """
-
 
 import logging
 import re
@@ -153,18 +153,7 @@ class Common:
     miscpunc = "…±°¹²³·©®×£¥€"
     """The middle dot (·) is used by Greek and Georgian."""
 
-    punctuation = "".join(
-        [
-            commonpunc,
-            quotes,
-            invertedpunc,
-            rtlpunc,
-            CJKpunc,
-            indicpunc,
-            ethiopicpunc,
-            miscpunc,
-        ]
-    )
+    punctuation = f"{commonpunc}{quotes}{invertedpunc}{rtlpunc}{CJKpunc}{indicpunc}{ethiopicpunc}{miscpunc}"
     """We include many types of punctuation here, simply since this is only
     meant to determine if something is punctuation. Hopefully we catch some
     languages which might not be represented with modules. Most languages won't
@@ -228,7 +217,8 @@ class Common:
     of such words."""
 
     def __new__(cls, code):
-        """This returns the language class for the given code, following a
+        """
+        This returns the language class for the given code, following a
         singleton like approach (only one object per language).
         """
         code = code or ""
@@ -252,7 +242,8 @@ class Common:
         return self
 
     def __repr__(self):
-        """Give a simple string representation without address information to
+        """
+        Give a simple string representation without address information to
         be able to store it in text for comparison later.
         """
         detail = ""
@@ -262,7 +253,8 @@ class Common:
 
     @classmethod
     def numbertranslate(cls, text):
-        """Converts the numbers in a string according to the rules of the
+        """
+        Converts the numbers in a string according to the rules of the
         language.
         """
         if text:
@@ -272,7 +264,8 @@ class Common:
 
     @classmethod
     def punctranslate(cls, text):
-        """Converts the punctuation in a string according to the rules of the
+        """
+        Converts the punctuation in a string according to the rules of the
         language.
         """
         # TODO: look at po::escapeforpo() for performance idea
@@ -299,7 +292,8 @@ class Common:
 
     @classmethod
     def length_difference(cls, length):
-        """Returns an estimate to a likely change in length relative to an
+        """
+        Returns an estimate to a likely change in length relative to an
         English string of length length.
         """
         # This is just a rudimentary heuristic guessing that most translations
@@ -319,7 +313,8 @@ class Common:
 
     @classmethod
     def alter_length(cls, text):
-        """Converts the given string by adding or removing characters as an
+        """
+        Converts the given string by adding or removing characters as an
         estimation of translation length (with English assumed as source
         language).
         """
@@ -334,11 +329,8 @@ class Common:
                     text = text[-extra:]
             return text
 
-        expanded = []
-        for subtext in text.split("\n\n"):
-            expanded.append(alter_it(subtext))
-        text = "\n\n".join(expanded)
-        return text
+        expanded = [alter_it(subtext) for subtext in text.split("\n\n")]
+        return "\n\n".join(expanded)
 
     @classmethod
     def character_iter(cls, text):
@@ -349,7 +341,7 @@ class Common:
             if c.isspace() and prev.isspace():
                 continue
             prev = c
-            if not (c in cls.punctuation):
+            if c not in cls.punctuation:
                 yield c
 
     @classmethod

@@ -16,13 +16,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""Class that manages subtitle files for translation.
+"""
+Class that manages subtitle files for translation.
 
-This class makes use of the subtitle functionality of ``gaupol``.
-
-.. seealso:: gaupol/agents/open.py::open_main
-
-A patch to gaupol is required to open utf-8 files successfully.
+This class makes use of the subtitle functionality of ``aeidon``.
 """
 
 import os
@@ -35,29 +32,13 @@ try:
     from aeidon import Subtitle, documents, newlines
     from aeidon.encodings import detect
     from aeidon.files import AdvSubStationAlpha, MicroDVD, SubRip, SubStationAlpha, new
-    from aeidon.util import detect_format as determine
+    from aeidon.util import detect_format
 except ImportError:
-    try:
-        from gaupol import FormatDeterminer, documents
-        from gaupol.encodings import detect
-        from gaupol.files import (
-            AdvSubStationAlpha,
-            MicroDVD,
-            SubRip,
-            SubStationAlpha,
-            new,
-        )
-        from gaupol.newlines import newlines
-        from gaupol.subtitle import Subtitle
-
-        _determiner = FormatDeterminer()
-        determine = _determiner.determine
-    except ImportError:
-        raise ImportError("\naeidon or gaupol package required for Subtitle support")
+    raise ImportError("\naeidon package required for Subtitle support")
 
 
 class SubtitleUnit(base.TranslationUnit):
-    """A subtitle entry that is translatable"""
+    """A subtitle entry that is translatable."""
 
     init_time = "00:00:00.000"
 
@@ -73,8 +54,7 @@ class SubtitleUnit(base.TranslationUnit):
     def getnotes(self, origin=None):
         if origin in ["programmer", "developer", "source code", None]:
             return "visible for %d seconds" % self._duration
-        else:
-            return ""
+        return ""
 
     def getlocations(self):
         return [f"{self._start}-->{self._end}"]
@@ -90,12 +70,12 @@ class MicroDVDUnit(SubtitleUnit):
 
 
 class SubtitleFile(base.TranslationStore):
-    """A subtitle file"""
+    """A subtitle file."""
 
     UnitClass = SubtitleUnit
 
     def __init__(self, inputfile=None, **kwargs):
-        """construct an Subtitle file, optionally reading in from inputfile."""
+        """Construct an Subtitle file, optionally reading in from inputfile."""
         super().__init__(**kwargs)
         self.filename = None
         self._subtitlefile = None
@@ -119,7 +99,7 @@ class SubtitleFile(base.TranslationStore):
     def _parse(self):
         try:
             self.encoding = detect(self.filename)
-            self._format = determine(self.filename, self.encoding)
+            self._format = detect_format(self.filename, self.encoding)
             self._subtitlefile = new(self._format, self.filename, self.encoding)
             for subtitle in self._subtitlefile.read():
                 newunit = self.addsourceunit(subtitle.main_text)
@@ -146,7 +126,7 @@ class SubtitleFile(base.TranslationStore):
 
     @classmethod
     def parsefile(cls, storefile):
-        """parse the given file"""
+        """Parse the given file."""
         newstore = cls()
         newstore._parsefile(storefile)
         return newstore
@@ -178,7 +158,7 @@ class SubtitleFile(base.TranslationStore):
 
 
 class SubRipFile(SubtitleFile):
-    """specialized class for SubRipFile's only"""
+    """specialized class for SubRipFile's only."""
 
     Name = "SubRip subtitles file"
     Extensions = ["srt"]
@@ -192,7 +172,7 @@ class SubRipFile(SubtitleFile):
 
 
 class MicroDVDFile(SubtitleFile):
-    """specialized class for SubRipFile's only"""
+    """specialized class for SubRipFile's only."""
 
     Name = "MicroDVD subtitles file"
     Extensions = ["sub"]
@@ -207,7 +187,7 @@ class MicroDVDFile(SubtitleFile):
 
 
 class AdvSubStationAlphaFile(SubtitleFile):
-    """specialized class for SubRipFile's only"""
+    """specialized class for SubRipFile's only."""
 
     Name = "Advanced Substation Alpha subtitles file"
     Extensions = ["ass"]
@@ -221,7 +201,7 @@ class AdvSubStationAlphaFile(SubtitleFile):
 
 
 class SubStationAlphaFile(SubtitleFile):
-    """specialized class for SubRipFile's only"""
+    """specialized class for SubRipFile's only."""
 
     Name = "Substation Alpha subtitles file"
     Extensions = ["ssa"]

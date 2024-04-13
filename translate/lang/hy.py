@@ -16,11 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""This module represents the Armenian language.
+"""
+This module represents the Armenian language.
 
 .. seealso:: :wp:`Armenian_language`
 """
-
 
 import re
 
@@ -32,14 +32,7 @@ class hy(common.Common):
 
     armenianpunc = "։՝՜՞"
 
-    punctuation = "".join(
-        [
-            common.Common.commonpunc,
-            common.Common.quotes,
-            common.Common.miscpunc,
-            armenianpunc,
-        ]
-    )
+    punctuation = f"{common.Common.commonpunc}{common.Common.quotes}{common.Common.miscpunc}{armenianpunc}"
 
     sentenceend = "։՝՜…"
 

@@ -16,10 +16,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""Module for handling XLIFF files for translation.
+"""
+Module for handling XLIFF files for translation.
 
 The official recommendation is to use the extention .xlf for XLIFF files.
 """
+
+import contextlib
 
 from lxml import etree
 
@@ -27,6 +30,7 @@ from translate.misc.multistring import multistring
 from translate.misc.xml_helpers import (
     clear_content,
     getXMLspace,
+    safely_set_text,
     setXMLlang,
     setXMLspace,
 )
@@ -43,46 +47,6 @@ ID_SEPARATOR = "\04"
 # instead when converting between xliff and other toolkit supported
 # formats
 ID_SEPARATOR_SAFE = "__%04__"
-
-
-# List of ASCII control codes which are unaccepted in XML.
-ASCII_CONTROL_CODES = [
-    "0000",  # Unicode Character 'NULL' (U+0000)
-    "0001",  # Unicode Character 'START OF HEADING' (U+0001)
-    "0002",  # Unicode Character 'START OF TEXT' (U+0002)
-    "0003",  # Unicode Character 'END OF TEXT' (U+0003)
-    "0004",  # Unicode Character 'END OF TRANSMISSION' (U+0004)
-    "0005",  # Unicode Character 'ENQUIRY' (U+0005)
-    "0006",  # Unicode Character 'ACKNOWLEDGE' (U+0006)
-    "0007",  # Unicode Character 'BELL' (U+0007), "\a" in Python
-    "0008",  # Unicode Character 'BACKSPACE' (U+0008), "\b" in Python
-    "000b",  # Unicode Character 'LINE TABULATION' (U+000B), "\v" in Python
-    "000c",  # Unicode Character 'FORM FEED (FF)' (U+000C), "\f" in Python
-    "000e",  # Unicode Character 'SHIFT OUT' (U+000E)
-    "000f",  # Unicode Character 'SHIFT IN' (U+000F)
-    "0010",  # Unicode Character 'DATA LINK ESCAPE' (U+0010)
-    "0011",  # Unicode Character 'DEVICE CONTROL ONE' (U+0011)
-    "0012",  # Unicode Character 'DEVICE CONTROL TWO' (U+0012)
-    "0013",  # Unicode Character 'DEVICE CONTROL THREE' (U+0013)
-    "0014",  # Unicode Character 'DEVICE CONTROL FOUR' (U+0014)
-    "0015",  # Unicode Character 'NEGATIVE ACKNOWLEDGE' (U+0015)
-    "0016",  # Unicode Character 'SYNCHRONOUS IDLE' (U+0016)
-    "0017",  # Unicode Character 'END OF TRANSMISSION BLOCK' (U+0017)
-    "0018",  # Unicode Character 'CANCEL' (U+0018)
-    "0019",  # Unicode Character 'END OF MEDIUM' (U+0019)
-    "001a",  # Unicode Character 'SUBSTITUTE' (U+001A)
-    "001b",  # Unicode Character 'ESCAPE' (U+001B)
-    "001c",  # Unicode Character 'INFORMATION SEPARATOR FOUR' (U+001C)
-    "001d",  # Unicode Character 'INFORMATION SEPARATOR THREE' (U+001D)
-    "001e",  # Unicode Character 'INFORMATION SEPARATOR TWO' (U+001E)
-    "001f",  # Unicode Character 'INFORMATION SEPARATOR ONE' (U+001F)
-]
-
-ASCII_CONTROL_CHARACTERS = {code: chr(int(code, 16)) for code in ASCII_CONTROL_CODES}
-
-ASCII_CONTROL_CHARACTERS_ESCAPES = {
-    code: "&#x%s;" % code.lstrip("0") or "0" for code in ASCII_CONTROL_CODES
-}
 
 
 class xliffunit(lisa.LISAunit):
@@ -133,18 +97,8 @@ class xliffunit(lisa.LISAunit):
             return
         setXMLspace(self.xmlelement, "preserve")
 
-    def getNodeText(self, languageNode, xml_space="preserve"):
-        """Retrieves the term from the given :attr:`languageNode`."""
-        text = super().getNodeText(languageNode, xml_space=xml_space)
-        if text is not None:
-            # Unescape the unaccepted ASCII control characters.
-            for code, character in ASCII_CONTROL_CHARACTERS.items():
-                text = text.replace(ASCII_CONTROL_CHARACTERS_ESCAPES[code], character)
-        return text
-
     def createlanguageNode(self, lang, text, purpose):
         """Returns an xml Element setup with given parameters."""
-
         # TODO: for now we do source, but we have to test if it is target,
         # perhaps with parameter. Alternatively, we can use lang, if
         # supplied, since an xliff file has to conform to the bilingual
@@ -154,11 +108,8 @@ class xliffunit(lisa.LISAunit):
         # TODO: check language
         # setXMLlang(langset, lang)
 
-        # Escape the unaccepted ASCII control characters.
-        for code in ASCII_CONTROL_CODES:
-            text = text.replace(chr(int(code, 16)), "&#x%s;" % code.lstrip("0") or "0")
+        safely_set_text(langset, text)
 
-        langset.text = text
         return langset
 
     def getlanguageNodes(self):
@@ -212,6 +163,7 @@ class xliffunit(lisa.LISAunit):
             self.set_target_dom(self.createlanguageNode(lang, "", "target"))
             return
 
+        self._ensure_xml_space_preserve()
         languageNode = self.get_target_dom()
         if languageNode is None:
             languageNode = self.createlanguageNode(lang, "", "target")
@@ -224,8 +176,9 @@ class xliffunit(lisa.LISAunit):
         ### currently giving some issues in Virtaal: self._rich_target = value
 
     def get_rich_target(self, lang=None):
-        """retrieves the "target" text (second entry), or the entry in the
-        specified language, if it exists
+        """
+        retrieves the "target" text (second entry), or the entry in the
+        specified language, if it exists.
         """
         if self._rich_target is None:
             self._rich_target = [
@@ -247,12 +200,12 @@ class xliffunit(lisa.LISAunit):
     def addalttrans(
         self, txt, origin=None, lang=None, sourcetxt=None, matchquality=None
     ):
-        """Adds an alt-trans tag and alt-trans components to the unit.
+        """
+        Adds an alt-trans tag and alt-trans components to the unit.
 
         :type txt: String
         :param txt: Alternative translation of the source text.
         """
-
         # TODO: support adding a source tag ad match quality attribute.  At the
         # source tag is needed to inject fuzzy matches from a TM.
         alttrans = etree.SubElement(self.xmlelement, self.namespaced("alt-trans"))
@@ -270,7 +223,8 @@ class xliffunit(lisa.LISAunit):
             setXMLlang(alttrans, lang)
 
     def getalttrans(self, origin=None):
-        """Returns <alt-trans> for the given origin as a list of units. No
+        """
+        Returns <alt-trans> for the given origin as a list of units. No
         origin means all alternatives.
         """
         translist = []
@@ -282,12 +236,10 @@ class xliffunit(lisa.LISAunit):
 
                 # the source tag is optional
                 sourcenode = node.iterdescendants(self.namespaced("source"))
-                try:
+                with contextlib.suppress(StopIteration):
                     newunit.source = lisa.getText(
                         next(sourcenode), getXMLspace(node, self._default_xml_space)
                     )
-                except StopIteration:
-                    pass
 
                 # must have one or more targets
                 targetnode = node.iterdescendants(self.namespaced("target"))
@@ -302,11 +254,11 @@ class xliffunit(lisa.LISAunit):
         return translist
 
     def delalttrans(self, alternative):
-        """Removes the supplied alternative from the list of alt-trans tags"""
+        """Removes the supplied alternative from the list of alt-trans tags."""
         self.xmlelement.remove(alternative.xmlelement)
 
     def addnote(self, text, origin=None, position="append"):
-        """Add a note specifically in a "note" tag"""
+        """Add a note specifically in a "note" tag."""
         if position != "append":
             self.removenotes(origin=origin)
 
@@ -320,7 +272,8 @@ class xliffunit(lisa.LISAunit):
             note.set("from", origin)
 
     def _getnotelist(self, origin=None):
-        """Returns the text from notes matching ``origin`` or all notes.
+        """
+        Returns the text from notes matching ``origin`` or all notes.
 
         :param origin: The origin of the note (or note type)
         :type origin: String
@@ -378,8 +331,7 @@ class xliffunit(lisa.LISAunit):
         if targetnode is None:
             if self.isapproved():
                 return self.S_UNREVIEWED
-            else:
-                return self.S_UNTRANSLATED
+            return self.S_UNTRANSLATED
 
         xmlstate = targetnode.get("state", None)
         state_n = self.statemap.get(xmlstate, self.S_UNTRANSLATED)
@@ -405,10 +357,9 @@ class xliffunit(lisa.LISAunit):
         if value == self.S_UNTRANSLATED:
             if targetnode is not None and "state" in targetnode.attrib:
                 del targetnode.attrib["state"]
-        else:
-            if targetnode is not None:
-                xmlstate = self.statemap_r.get(value)
-                targetnode.set("state", xmlstate)
+        elif targetnode is not None:
+            xmlstate = self.statemap_r.get(value)
+            targetnode.set("state", xmlstate)
 
         self.markapproved(value > self.S_NEEDS_REVIEW)
 
@@ -424,11 +375,12 @@ class xliffunit(lisa.LISAunit):
             self.xmlelement.set("approved", "no")
 
     def isreview(self):
-        """States whether this unit needs to be reviewed"""
+        """States whether this unit needs to be reviewed."""
         return self.get_state_id() == self.S_NEEDS_REVIEW
 
     def markreviewneeded(self, needsreview=True, explanation=None):
-        """Marks the unit to indicate whether it needs review.
+        """
+        Marks the unit to indicate whether it needs review.
 
         Adds an optional explanation as a note.
         """
@@ -458,12 +410,15 @@ class xliffunit(lisa.LISAunit):
             if state_id < self.S_UNREVIEWED:
                 self.set_state_n(self.S_UNREVIEWED)
 
+    def _ensure_xml_space_preserve(self):
+        if getXMLspace(self.xmlelement) != "preserve":
+            setXMLspace(self.xmlelement, "preserve")
+
     def settarget(self, target, lang="xx", append=False):
         """Sets the target string to the given value."""
         super().settarget(target, lang, append)
         if target:
-            if getXMLspace(self.xmlelement) != "preserve":
-                setXMLspace(self.xmlelement, "preserve")
+            self._ensure_xml_space_preserve()
             self.marktranslated()
 
     # This code is commented while this will almost always return false.
@@ -527,7 +482,8 @@ class xliffunit(lisa.LISAunit):
         return locations
 
     def createcontextgroup(self, name, contexts=None, purpose=None):
-        """Add the context group to the trans-unit with contexts a list with
+        """
+        Add the context group to the trans-unit with contexts a list with
         (type, text) tuples describing each context.
         """
         assert contexts
@@ -548,50 +504,48 @@ class xliffunit(lisa.LISAunit):
             context.set("context-type", type)
 
     def getcontextgroups(self, name):
-        """Returns the contexts in the context groups with the specified name"""
+        """Returns the contexts in the context groups with the specified name."""
         groups = []
         grouptags = self.xmlelement.iterdescendants(self.namespaced("context-group"))
         # TODO: conbine name in query
         for group in grouptags:
             if group.get("name") == name:
                 contexts = group.iterdescendants(self.namespaced("context"))
-                pairs = []
-                for context in contexts:
-                    pairs.append(
-                        (
-                            context.get("context-type"),
-                            lisa.getText(
-                                context,
-                                getXMLspace(self.xmlelement, self._default_xml_space),
-                            ),
-                        )
+                pairs = [
+                    (
+                        context.get("context-type"),
+                        lisa.getText(
+                            context,
+                            getXMLspace(self.xmlelement, self._default_xml_space),
+                        ),
                     )
+                    for context in contexts
+                ]
                 groups.append(pairs)  # not extend
         return groups
 
     def getcontextgroupsbyattribute(self, attributeName, attributeValue):
-        """Returns the contexts in the context groups with the specified attributeName and attributeValue"""
+        """Returns the contexts in the context groups with the specified attributeName and attributeValue."""
         groups = []
         grouptags = self.xmlelement.iterdescendants(self.namespaced("context-group"))
         for group in grouptags:
             if group.get(attributeName) == attributeValue:
                 contexts = group.iterdescendants(self.namespaced("context"))
-                pairs = []
-                for context in contexts:
-                    pairs.append(
-                        (
-                            context.get("context-type"),
-                            lisa.getText(
-                                context,
-                                getXMLspace(self.xmlelement, self._default_xml_space),
-                            ),
-                        )
+                pairs = [
+                    (
+                        context.get("context-type"),
+                        lisa.getText(
+                            context,
+                            getXMLspace(self.xmlelement, self._default_xml_space),
+                        ),
                     )
+                    for context in contexts
+                ]
                 groups.append(pairs)  # not extend
         return groups
 
     def getrestype(self):
-        """returns the restype attribute in the trans-unit tag"""
+        """Returns the restype attribute in the trans-unit tag."""
         return self.xmlelement.get("restype")
 
     def merge(self, otherunit, overwrite=False, comments=True, authoritative=False):
@@ -610,19 +564,17 @@ class xliffunit(lisa.LISAunit):
 
     @staticmethod
     def correctorigin(node, origin):
-        """Check against node tag's origin (e.g note or alt-trans)"""
-        if origin is None:
-            return True
-        elif origin in node.get("from", ""):
-            return True
-        elif origin in node.get("origin", ""):
-            return True
-        else:
-            return False
+        """Check against node tag's origin (e.g note or alt-trans)."""
+        return (
+            origin is None
+            or origin in node.get("from", "")
+            or origin in node.get("origin", "")
+        )
 
     @classmethod
     def multistring_to_rich(cls, mstr):
-        """Override :meth:`TranslationUnit.multistring_to_rich` which is used
+        """
+        Override :meth:`TranslationUnit.multistring_to_rich` which is used
         by the ``rich_source`` and ``rich_target`` properties.
         """
         strings = mstr
@@ -635,7 +587,8 @@ class xliffunit(lisa.LISAunit):
 
     @classmethod
     def rich_to_multistring(cls, elem_list):
-        """Override :meth:`TranslationUnit.rich_to_multistring` which is used
+        """
+        Override :meth:`TranslationUnit.rich_to_multistring` which is used
         by the ``rich_source`` and ``rich_target`` properties.
         """
         return multistring([str(elem) for elem in elem_list])
@@ -657,7 +610,13 @@ class xlifffile(lisa.LISAfile):
 </body>
 </file>
 </xliff>"""
-    XMLindent = {"indent": "  ", "max_level": 4, "toplevel": False}
+    XMLindent = {
+        "indent": "  ",
+        "max_level": 8,
+        "leaves": {"note", "source", "target"},
+        "toplevel": False,
+        "ignore_preserve": {"trans-unit"},
+    }
     namespace = "urn:oasis:names:tc:xliff:document:1.1"
     unversioned_namespace = "urn:oasis:names:tc:xliff:document:"
 
@@ -689,12 +648,12 @@ class xlifffile(lisa.LISAfile):
 
     def addheader(self):
         """Initialise the file header."""
-        pass
 
     def createfilenode(
         self, filename, sourcelanguage=None, targetlanguage=None, datatype="plaintext"
     ):
-        """creates a filenode with the given filename. All parameters are
+        """
+        creates a filenode with the given filename. All parameters are
         needed for XLIFF compliance.
         """
         if sourcelanguage is None:
@@ -722,16 +681,16 @@ class xlifffile(lisa.LISAfile):
 
     @staticmethod
     def getfilename(filenode):
-        """returns the name of the given file"""
+        """Returns the name of the given file."""
         return filenode.get("original")
 
     @staticmethod
     def setfilename(filenode, filename):
-        """set the name of the given file"""
+        """Set the name of the given file."""
         return filenode.set("original", filename)
 
     def getfilenames(self):
-        """returns all filenames in this XLIFF file"""
+        """Returns all filenames in this XLIFF file."""
         filenodes = self.document.getroot().iterchildren(self.namespaced("file"))
         filenames = [self.getfilename(filenode) for filenode in filenodes]
         filenames = list(filter(None, filenames))
@@ -740,7 +699,7 @@ class xlifffile(lisa.LISAfile):
         return filenames
 
     def getfilenode(self, filename, createifmissing=False):
-        """finds the filenode with the given name"""
+        """Finds the filenode with the given name."""
         filenodes = self.document.getroot().iterchildren(self.namespaced("file"))
         for filenode in filenodes:
             if self.getfilename(filenode) == filename:
@@ -774,7 +733,8 @@ class xlifffile(lisa.LISAfile):
     targetlanguage = property(gettargetlanguage, settargetlanguage)
 
     def getdatatype(self, filename=None):
-        """Returns the datatype of the stored file. If no filename is given,
+        """
+        Returns the datatype of the stored file. If no filename is given,
         the datatype of the first file is given.
         """
         if filename:
@@ -788,7 +748,8 @@ class xlifffile(lisa.LISAfile):
         return ""
 
     def getdate(self, filename=None):
-        """Returns the date attribute for the file.
+        """
+        Returns the date attribute for the file.
 
         If no filename is given, the date of the first file is given.
         If the date attribute is not specified, None is returned.
@@ -807,7 +768,8 @@ class xlifffile(lisa.LISAfile):
         return None
 
     def removedefaultfile(self):
-        """We want to remove the default file-tag as soon as possible if we
+        """
+        We want to remove the default file-tag as soon as possible if we
         know if still present and empty.
         """
         filenodes = list(self.document.getroot().iterchildren(self.namespaced("file")))
@@ -820,7 +782,7 @@ class xlifffile(lisa.LISAfile):
                 break
 
     def getheadernode(self, filenode, createifmissing=False):
-        """finds the header node for the given filenode"""
+        """Finds the header node for the given filenode."""
         # TODO: Deprecated?
         headernode = filenode.iterchildren(self.namespaced("header"))
         try:
@@ -829,11 +791,10 @@ class xlifffile(lisa.LISAfile):
             pass
         if not createifmissing:
             return None
-        headernode = etree.SubElement(filenode, self.namespaced("header"))
-        return headernode
+        return etree.SubElement(filenode, self.namespaced("header"))
 
     def getbodynode(self, filenode, createifmissing=False):
-        """finds the body node for the given filenode"""
+        """Finds the body node for the given filenode."""
         bodynode = filenode.iterchildren(self.namespaced("body"))
         try:
             return next(bodynode)
@@ -852,9 +813,10 @@ class xlifffile(lisa.LISAfile):
         super().addunit(unit, new=new)
 
     def addsourceunit(self, source, filename="NoName", createifmissing=False):
-        """adds the given trans-unit to the last used body node if the filename
+        """
+        adds the given trans-unit to the last used body node if the filename
         has changed it uses the slow method instead (will create the nodes
-        required if asked). Returns success
+        required if asked). Returns success.
         """
         if not self.switchfile(filename, createifmissing):
             return None
@@ -867,7 +829,8 @@ class xlifffile(lisa.LISAfile):
         return unit
 
     def switchfile(self, filename, createifmissing=False):
-        """Adds the given trans-unit (will create the nodes required if asked).
+        """
+        Adds the given trans-unit (will create the nodes required if asked).
 
         :returns: Success
         :rtype: Boolean
@@ -886,7 +849,7 @@ class xlifffile(lisa.LISAfile):
         return self.body is not None
 
     def creategroup(self, filename="NoName", createifmissing=False, restype=None):
-        """adds a group tag into the specified file"""
+        """Adds a group tag into the specified file."""
         if not self.switchfile(filename, createifmissing):
             return None
         group = etree.SubElement(self.body, self.namespaced("group"))
@@ -900,7 +863,7 @@ class xlifffile(lisa.LISAfile):
 
     @classmethod
     def parsestring(cls, storestring):
-        """Parses the string to return the correct file object"""
+        """Parses the string to return the correct file object."""
         xliff = super().parsestring(storestring)
         if xliff.units:
             header = xliff.units[0]

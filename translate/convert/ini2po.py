@@ -16,7 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""Convert .ini files to Gettext PO localization files.
+"""
+Convert .ini files to Gettext PO localization files.
 
 See: http://docs.translatehouse.org/projects/translate-toolkit/en/latest/commands/ini2po.html
 for examples and usage instructions.
@@ -78,10 +79,7 @@ class ini2po:
 
     def merge_stores(self):
         """Convert two source format files to a target format file."""
-        self.extraction_msg = "extracted from {}, {}".format(
-            self.template_store.filename,
-            self.source_store.filename,
-        )
+        self.extraction_msg = f"extracted from {self.template_store.filename}, {self.source_store.filename}"
 
         self.source_store.makeindex()
         for template_unit in self.template_store.units:

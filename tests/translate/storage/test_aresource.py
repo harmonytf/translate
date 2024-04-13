@@ -75,8 +75,8 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
         self.__check_escape(string, xml)
 
     def test_escape_question(self):
-        string = "question?"
-        xml = '<string name="teststring">question\\?</string>\n'
+        string = "?question?"
+        xml = '<string name="teststring">\\?question?</string>\n'
         self.__check_escape(string, xml)
 
     def test_escape_double_space(self):
@@ -101,14 +101,12 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
 
     def test_escape_html_code(self):
         string = "some <b>html code</b> here"
-        xml = '<string name="teststring">some <b>html code</b> here' "</string>\n"
+        xml = '<string name="teststring">some <b>html code</b> here</string>\n'
         self.__check_escape(string, xml)
 
     def test_escape_html_code_quote(self):
         string = "some <b>html code</b> 'here'"
-        xml = (
-            "<string name=\"teststring\">some <b>html code</b> \\'here\\'" "</string>\n"
-        )
+        xml = "<string name=\"teststring\">some <b>html code</b> \\'here\\'</string>\n"
         self.__check_escape(string, xml)
 
     def test_escape_html_code_quote_newline(self):
@@ -290,7 +288,7 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
 
     def test_parse_html_code(self):
         string = "some <b>html code</b> here"
-        xml = '<string name="teststring">some <b>html code</b> here' "</string>\n"
+        xml = '<string name="teststring">some <b>html code</b> here</string>\n'
         self.__check_parse(string, xml)
 
     def test_parse_arrows(self):
@@ -356,7 +354,8 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
         self.__check_parse(string, xml)
 
     def test_parse_newline_in_string(self):
-        """Check that newline is read as space.
+        """
+        Check that newline is read as space.
 
         At least it seems to be what Android does.
         """
@@ -366,7 +365,7 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
 
     def test_parse_not_translatable_string(self):
         string = "string"
-        xml = '<string name="teststring" translatable="false">string' "</string>\n"
+        xml = '<string name="teststring" translatable="false">string</string>\n'
         self.__check_parse(string, xml)
 
     def test_plural_parse_message_with_newline(self):
@@ -862,5 +861,88 @@ class TestAndroidResourceFile(test_monolingual.TestMonolingualStore):
     <string name="test1">Test</string>
     <!-- Third -->
     <string name="test3">Test2</string>
+</resources>"""
+        )
+
+    def test_cdata(self):
+        body = r"""<Data>XXX<b>x</b><![CDATA[
+    <html><head>
+      <style type=\"text/css\">
+        body { margin: 0px; }
+      </style></head><body>
+      <div style=\"background-color: transparent; color: %1$s; padding:
+%2$dpx;\">
+        <p>This app requires <strong>permission to access all
+files</strong> on the storage.</p>
+      </div>
+    </body></html>
+    ]]></Data>"""
+        content = f"""<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dialog_storage_permission_info" formatted="false">{body}</string>
+</resources>"""
+        store = self.StoreClass()
+        store.parse(content.encode())
+        assert len(store.units) == 1
+        assert store.units[0].target == body
+        assert bytes(store).decode() == content
+        store.units[0].target = body
+        assert bytes(store).decode() == content
+
+    def test_prefix(self):
+        body = "&lt; <b>body</b>"
+        content = f"""<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="test">{body}</string>
+</resources>"""
+        store = self.StoreClass()
+        store.parse(content.encode())
+        assert len(store.units) == 1
+        assert store.units[0].target == body
+        assert bytes(store).decode() == content
+
+    def test_rtl(self):
+        content = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_permission_required"><i>{app_name}</i> צרכה רשות לגשת ליומן שלך, על מנת ליצור תוכניות עבור עסקאות עתידיות חוזרות.</string>
+</resources>"""
+        store = self.StoreClass()
+        store.parse(content.encode())
+        assert len(store.units) == 1
+        assert (
+            store.units[0].target
+            == "<i>{app_name}</i> צרכה רשות לגשת ליומן שלך, על מנת ליצור תוכניות עבור עסקאות עתידיות חוזרות."
+        )
+
+
+class TestMOKOResourceUnit(test_monolingual.TestMonolingualUnit):
+    UnitClass = aresource.MOKOResourceUnit
+
+
+class TestMOKOResourceFile(test_monolingual.TestMonolingualStore):
+    StoreClass = aresource.MOKOResourceFile
+
+    def test_plural(self):
+        content = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plural name="vms_num_visitors">
+        <item quantity="one">%d visitor</item>
+        <item quantity="other">%d visitors</item>
+    </plural>
+</resources>"""
+        store = self.StoreClass()
+        store.parse(content.encode())
+        assert store.units[0].target == multistring(["%d visitor", "%d visitors"])
+        store = self.StoreClass()
+        store.targetlanguage = "zh-rHK"
+        store.parse(content.encode())
+        store.units[0].target = "%d 訪客"
+        assert (
+            bytes(store).decode()
+            == """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plural name="vms_num_visitors">
+        <item quantity="other">%d 訪客</item>
+    </plural>
 </resources>"""
         )

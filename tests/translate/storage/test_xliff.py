@@ -50,7 +50,8 @@ class TestXLIFFUnit(test_base.TestTranslationUnit):
         assert unit.geterrors()["test1"] == "New error 1."
 
     def test_accepted_control_chars(self):
-        """Tests we can assign the accepted control chars.
+        """
+        Tests we can assign the accepted control chars.
 
         Source: :wp:`Valid_characters_in_XML#XML_1.0`
         """
@@ -65,24 +66,13 @@ class TestXLIFFUnit(test_base.TestTranslationUnit):
         assert self.unit.target == "Een\r"
 
     def test_unaccepted_control_chars(self):
-        """Tests we cannot assign the unaccepted control chars without escaping.
+        """
+        Tests we cannot assign the unaccepted control chars without escaping.
 
         Source: :wp:`Valid_characters_in_XML#XML_1.0`
         """
-        for code in xliff.ASCII_CONTROL_CODES:
-            self.unit.target = "Een&#x%s;" % code.lstrip("0") or "0"
-            assert self.unit.target == "Een%s" % chr(int(code, 16))
-            self.unit.target = "Een%s" % chr(int(code, 16))
-            assert self.unit.target == "Een%s" % chr(int(code, 16))
-
-    def test_unaccepted_control_chars_escapes_roundtrip(self):
-        """Test control characters go ok on escaping roundtrip."""
-        for code in xliff.ASCII_CONTROL_CODES:
-            special = "Een%s" % chr(int(code, 16))
-            self.unit.source = special
-            print("unit.source:", repr(self.unit.source))
-            print("special:", repr(special))
-            assert self.unit.source == special
+        self.unit.target = "Een\x00"
+        assert self.unit.target == "Een"
 
 
 class TestXLIFFfile(test_base.TestTranslationStore):
@@ -233,7 +223,8 @@ class TestXLIFFfile(test_base.TestTranslationStore):
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.1" version="1.1">
   <file original="NoName" source-language="en" datatype="plaintext">
     <body>
-      <trans-unit xml:space="preserve" id="2" approved="yes"><source></source>
+      <trans-unit xml:space="preserve" id="2" approved="yes">
+        <source></source>
         <target state="translated">foobaz<g id="oof"><g id="zab">barrab</g></g></target>
       </trans-unit>
     </body>
@@ -326,10 +317,10 @@ class TestXLIFFfile(test_base.TestTranslationStore):
         assert unit.getnotes(origin="Dad") == "Don't forget the beer"
 
         assert (
-            not unit.getnotes(origin="Bob")
-            == "Please buy bread\nPlease buy milk\nDon't forget the beer"
+            unit.getnotes(origin="Bob")
+            != "Please buy bread\nPlease buy milk\nDon't forget the beer"
         )
-        assert not notenodes[2].get("from") == "Mom"
+        assert notenodes[2].get("from") != "Mom"
         assert "from" not in notenodes[0].attrib
         assert (
             unit.getnotes()
@@ -340,7 +331,7 @@ class TestXLIFFfile(test_base.TestTranslationStore):
 
     @staticmethod
     def test_alttrans():
-        """Test xliff <alt-trans> accessors"""
+        """Test xliff <alt-trans> accessors."""
         xlifffile = xliff.xlifffile()
         unit = xlifffile.addsourceunit("Testing")
 
@@ -600,7 +591,7 @@ class TestXLIFFfile(test_base.TestTranslationStore):
 
     @staticmethod
     def test_add_target():
-        xlfsource = b"""<?xml version="1.0" encoding="UTF-8"?>
+        xlfsource = """<?xml version="1.0" encoding="UTF-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.1" version="1.1">
   <file original="doc.txt" source-language="en-US">
     <body>
@@ -615,14 +606,14 @@ class TestXLIFFfile(test_base.TestTranslationStore):
   <file original="doc.txt" source-language="en-US">
     <body>
       <trans-unit id="1" xml:space="preserve">
-      <target>Soubor</target>
+        <target>Soubor</target>
       </trans-unit>
     </body>
   </file>
 </xliff>
 """
         xfile = xliff.xlifffile.parsestring(xlfsource)
-        assert bytes(xfile) == xlfsource
+        assert bytes(xfile).decode() == xlfsource
         xfile.units[0].rich_target = ["Soubor"]
         assert bytes(xfile).decode("ascii") == xlftarget
 
@@ -757,3 +748,87 @@ class TestXLIFFfile(test_base.TestTranslationStore):
             "docs/config.md:block 1 (header)",
             "file.rst",
         ]
+
+    def test_huge(self):
+        # This create approx 120MB Xliff file
+        xlfsource = self.skeleton % (
+            """<trans-unit id="1">
+                     <source>text</source>
+                     <target/>
+                 </trans-unit>"""
+            * 100_000
+        )
+        xlifffile = xliff.xlifffile.parsestring(xlfsource)
+        assert len(xlifffile.units) == 100_000
+
+    def test_preserve_add(self):
+        target = """Por favor, ten a la mano los siguientes documentos para completar el proceso:
+• INE (Credencial para votar) o pasaporte, vigentes
+• Carátula del estado de cuenta bancario personal
+• Cuenta CLABE Bancaria
+• Constancia de Situación Fiscal con el Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios, con una vigencia no mayor a 90 días, completa, en FORMATO PDF"""
+        xlfsource_template = """<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en-US" target-language="en-US" original="Email - SMTP API">
+    <body>
+      <group id="body">
+        <trans-unit id="8864d0bd25f99594bbfb59780cb19a091946d8e6" datatype="html"{extra}>
+          <source>Status</source>{target}
+          <context-group purpose="location">
+            <context context-type="sourcefile">src/app/settings/component/profile/example/example.component.html</context>
+            <context context-type="linenumber">3</context>
+          </context-group>
+          <note priority="1" from="description">settings</note>
+        </trans-unit>
+      </group>
+    </body>
+  </file>
+</xliff>
+"""
+        target_element = f"""
+          <target state="translated">{target}</target>"""
+        xlfsource_blank = xlfsource_template.format(target="", extra="")
+        xlfsource_plain = xlfsource_template.format(target=target_element, extra="")
+        xlfsource_preserve = xlfsource_template.format(
+            target=target_element, extra=' xml:space="preserve"'
+        )
+        xlifffile = xliff.xlifffile.parsestring(xlfsource_plain)
+
+        assert len(xlifffile.units) == 1
+        unit = xlifffile.units[0]
+
+        assert unit.target == target.replace("\n", " ")
+        unit.target = target
+
+        assert bytes(xlifffile).decode() == xlfsource_preserve
+
+        xlifffile = xliff.xlifffile.parsestring(xlfsource_blank)
+
+        assert len(xlifffile.units) == 1
+        unit = xlifffile.units[0]
+
+        assert unit.target is None
+        unit.target = target
+
+        assert bytes(xlifffile).decode() == xlfsource_template.format(
+            target=target_element, extra=' xml:space="preserve" approved="yes"'
+        )
+
+        xlifffile = xliff.xlifffile.parsestring(xlfsource_preserve)
+
+        assert len(xlifffile.units) == 1
+        unit = xlifffile.units[0]
+
+        assert unit.target == target
+
+        assert bytes(xlifffile).decode() == xlfsource_preserve
+
+        xlifffile = xliff.xlifffile.parsestring(xlfsource_plain)
+
+        assert len(xlifffile.units) == 1
+        unit = xlifffile.units[0]
+
+        assert unit.target == target.replace("\n", " ")
+        unit.rich_target = [target]
+
+        assert bytes(xlifffile).decode() == xlfsource_preserve

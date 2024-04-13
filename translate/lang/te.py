@@ -16,11 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""This module represents the Telugu language.
+"""
+This module represents the Telugu language.
 
 .. seealso:: :wp:`Telugu_language`
 """
-
 
 from translate.lang import common
 

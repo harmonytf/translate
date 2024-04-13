@@ -1,4 +1,4 @@
-name: Test on Linux
+name: Tests
 
 on:
   push:
@@ -17,8 +17,9 @@ permissions:
 jobs:
   test:
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         requirements: [latest]
         python-version:
@@ -26,24 +27,36 @@ jobs:
         - '3.9'
         - '3.10'
         - '3.11'
+        - '3.12'
+        os:
+        - ubuntu-latest
+        - windows-latest
+        - macos-latest
         include:
         - requirements: minimal
           python-version: '3.8'
+          os: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: pip
         cache-dependency-path: requirements/*.txt
     - name: Install apt dependencies
+      if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -y libgettextpo-dev libxml2-dev libxmlsec1-dev gettext hunspell-af
+    - name: Install Windows dependencies
+      if: matrix.os == 'windows-latest'
+      run: |
+        nuget install Gettext.Tools -Version 0.22.4 -OutputDirectory c:\nuget;
+        Add-Content $env:GITHUB_PATH "C:\nuget\Gettext.Tools.0.22.4\tools\bin"
     - name: Update pip
-      run: pip install --upgrade pip wheel
+      run: python -m pip install --upgrade pip wheel
     - name: Install pip dependencies
       run: pip install -r requirements/test.txt
     - name: Install pip dependencies
@@ -57,6 +70,7 @@ jobs:
     - name: pytest
       run: make test
     - name: test-functional
+      if: matrix.os != 'windows-latest'
       env:
         PYTHON_ARGS: -m coverage run --append --source ${{ github.workspace }}/translate
         COVERAGE_FILE: ${{ github.workspace }}/.coverage
@@ -64,6 +78,6 @@ jobs:
     - name: Coverage
       run: |
         coverage xml
-    - uses: codecov/codecov-action@v3
+    - uses: codecov/codecov-action@v4
       with:
         name: ${{ runner.os }}, Python ${{ matrix.python-version }}, ${{ matrix.requirements }}

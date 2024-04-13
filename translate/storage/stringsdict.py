@@ -18,7 +18,8 @@ class StringsDictId(base.UnitId):
 
 
 class StringsDictUnit(base.DictUnit):
-    """A single entry in a .stringsdict file.
+    """
+    A single entry in a .stringsdict file.
     One entry represents either a localized format string, or a variable used
     within another string.
     """
@@ -74,7 +75,8 @@ class StringsDictUnit(base.DictUnit):
 
 
 class StringsDictFile(base.DictStore):
-    """Class representing a .stringsdict file.
+    """
+    Class representing a .stringsdict file.
 
     One entry in a .stringsdict file consists of a format string, and any
     number of variables with plural strings.
@@ -113,7 +115,8 @@ class StringsDictFile(base.DictStore):
 
     @property
     def target_plural_tags(self):
-        """Get all supported plural tags for the target language.
+        """
+        Get all supported plural tags for the target language.
         Note that 'zero' is always supported.
         """
         target_lang = self.gettargetlanguage()
@@ -128,7 +131,6 @@ class StringsDictFile(base.DictStore):
 
     def parse(self, input):
         """Read a .stringsdict file into a dictionary, and convert it to translation units."""
-
         if isinstance(input, (bytes, str)):
             plist = plistlib.loads(input)
         elif input is not None:
@@ -138,7 +140,7 @@ class StringsDictFile(base.DictStore):
 
         for key, outer in plist.items():
             if not isinstance(outer, dict):
-                raise ValueError(f"{key} is not a dict")
+                raise TypeError(f"{key} is not a dict")
             for innerkey, value in outer.items():
                 if innerkey == "NSStringLocalizedFormatKey":
                     u = self.UnitClass()
@@ -180,17 +182,8 @@ class StringsDictFile(base.DictStore):
 
                 plural_tags = self.target_plural_tags
 
-                if isinstance(u.target, multistring):
-                    plural_strings = u.target.strings
-                elif isinstance(u.target, list):
-                    plural_strings = u.target
-                else:
-                    plural_strings = [u.target]
-
                 # Sync plural_strings elements to plural_tags count.
-                if len(plural_strings) < len(plural_tags):
-                    plural_strings += [""] * (len(plural_tags) - len(plural_strings))
-                plural_strings = plural_strings[: len(plural_tags)]
+                plural_strings = self.UnitClass.sync_plural_count(u.target, plural_tags)
 
                 for plural_tag, plural_string in zip(plural_tags, plural_strings):
                     if plural_string:

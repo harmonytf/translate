@@ -21,12 +21,12 @@ Contains the ``parse`` function that parses normal strings into StringElem-
 based "rich" string element trees.
 """
 
-
 from translate.storage.placeables.strelem import StringElem
 
 
 def parse(tree, parse_funcs):
-    """Parse placeables from the given string or sub-tree by using the
+    """
+    Parse placeables from the given string or sub-tree by using the
     parsing functions provided.
 
     The output of this function is **heavily** dependent on the order of the

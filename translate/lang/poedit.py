@@ -16,14 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""Functions to manage Poedit's language features.
+"""
+Functions to manage Poedit's language features.
 
 .. note:: The ISO 639 maps are from Poedit's
    `isocode.cpp
    <https://github.com/vslavik/poedit/blob/v1.4.2/src/isocodes.cpp#L36-227>`_
    (v1.4.2) to ensure that we match currently released versions of Poedit.
 """
-
 
 lang_codes = {
     "aa": "Afar",
@@ -214,7 +214,8 @@ default fallback"""
 
 
 def isocode(language, country=None):
-    """Returns a language code for the given Poedit language name.
+    """
+    Returns a language code for the given Poedit language name.
 
     Poedit uses language and country names in the PO header entries:
 
@@ -235,4 +236,4 @@ def isocode(language, country=None):
     dialect = dialects.get(language)
     if dialect:
         return dialect.get(country, dialect["None"])
-    return lang_names.get(language, None)
+    return lang_names.get(language)

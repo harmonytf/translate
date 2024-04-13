@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""Tests converting Gettext PO localisation files to .Net Resource (.resx) files"""
+"""Tests converting Gettext PO localisation files to .Net Resource (.resx) files."""
 
 from io import BytesIO
 
@@ -87,7 +87,7 @@ class TestPO2RESX:
 
     @staticmethod
     def po2resx(resxsource, po_source):
-        """Helper that merges po translations to .resx source without requiring files"""
+        """Helper that merges po translations to .resx source without requiring files."""
         po_store = po.pofile(po_source.encode("utf-8"))
         template_file = BytesIO(resxsource.encode())
         convertor = po2resx.po2resx(template_file, po_store)
@@ -95,7 +95,7 @@ class TestPO2RESX:
         return output_resx.decode("utf-8")
 
     def test_simpleunit(self):
-        """Checks that a simple po entry definition converts properly to a resx entry"""
+        """Checks that a simple po entry definition converts properly to a resx entry."""
         po_source = r'''#: key
 msgid "Source Text"
 msgstr "Some translated text"'''
@@ -112,7 +112,7 @@ msgstr "Some translated text"'''
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_basic(self):
         po_source = r"""# Afrikaans translation of program ABC
@@ -146,10 +146,10 @@ msgstr "Toepassings"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_multiline(self):
-        """Test multiline po entry"""
+        """Test multiline po entry."""
         po_source = r'''#: ResourceKey
 msgid "First part "
 "and extra"
@@ -168,10 +168,10 @@ msgstr "Eerste deel "
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_escapednewlines(self):
-        """Test the escaping of newlines"""
+        """Test the escaping of newlines."""
         po_source = r"""#: ResourceKey
 msgid "First line\nSecond line"
 msgstr "Eerste lyn\nTweede lyn"
@@ -190,10 +190,10 @@ Tweede lyn</value>
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_escapedtabs(self):
-        """Test the escaping of tabs"""
+        """Test the escaping of tabs."""
         po_source = r"""#: ResourceKey
 msgid "First column\tSecond column"
 msgstr "Eerste kolom\tTweede kolom"
@@ -211,10 +211,10 @@ msgstr "Eerste kolom\tTweede kolom"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_escapedquotes(self):
-        """Test the escaping of quotes (and slash)"""
+        """Test the escaping of quotes (and slash)."""
         po_source = r"""#: ResourceKey
 msgid "Hello \"Everyone\""
 msgstr "Good day \"All\""
@@ -235,10 +235,10 @@ msgstr "Gebruik \\\"."
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_exclusions(self):
-        """Test that empty and fuzzy messages are excluded"""
+        """Test that empty and fuzzy messages are excluded."""
         po_source = r"""#: ResourceKey
 #, fuzzy
 msgid "One"
@@ -277,10 +277,10 @@ msgstr "Drie"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_automaticcomments(self):
-        """Tests that automatic comments are imported"""
+        """Tests that automatic comments are imported."""
         po_source = """#. This is a comment
 #: ResourceKey
 msgid "Bézier curve"
@@ -300,10 +300,10 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_automaticcomments_existingcomment(self):
-        """Tests a differing automatic comment is added if there is an existing automatic comment"""
+        """Tests a differing automatic comment is added if there is an existing automatic comment."""
         po_source = """#. This is a new comment
 #: ResourceKey
 msgid "Bézier curve"
@@ -325,10 +325,10 @@ This is a new comment</comment>
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_automaticcomments_existingduplicatecomment(self):
-        """Tests there is no duplication of automatic comments if it already exists and hasn't changed"""
+        """Tests there is no duplication of automatic comments if it already exists and hasn't changed."""
         po_source = """#. This is an existing comment
 #: ResourceKey
 msgid "Bézier curve"
@@ -349,12 +349,12 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_automaticcomments_existingduplicatecommentwithwhitespace(self):
         """
         Tests there is no duplication of automatic comments if it already
-        exists, hasn't changed but has leading or trailing whitespaces
+        exists, hasn't changed but has leading or trailing whitespaces.
         """
         po_source = """#.  This is an existing comment with leading and trailing spaces
 #: ResourceKey
@@ -376,10 +376,10 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_translatorcomments(self):
-        """Tests that translator comments are imported"""
+        """Tests that translator comments are imported."""
         po_source = """# This is a translator comment : 22.12.14
 #: ResourceKey
 msgid "Bézier curve"
@@ -399,10 +399,10 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_translatorcomments_existingcomment(self):
-        """Tests a differing translator comment is added if there is an existing translator comment"""
+        """Tests a differing translator comment is added if there is an existing translator comment."""
         po_source = """# This is a new translator comment
 #: ResourceKey
 msgid "Bézier curve"
@@ -424,10 +424,10 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_translatorcomments_existingduplicatecomment(self):
-        """Tests there is no duplication of translator comments if it already exists and hasn't changed"""
+        """Tests there is no duplication of translator comments if it already exists and hasn't changed."""
         po_source = """# This is an existing translator comment
 #: ResourceKey
 msgid "Bézier curve"
@@ -448,10 +448,10 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_combocomments(self):
-        """Tests that translator comments and automatic comments are imported"""
+        """Tests that translator comments and automatic comments are imported."""
         po_source = """#. This is a developer comment
 # This is a translator comment : 22.12.14
 #: ResourceKey
@@ -473,12 +473,12 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_combocomments_existingduplicatecomment(self):
         """
         Tests there is no duplication of automatic comment if it already exists
-        and hasn't changed, but still adds the translator comment
+        and hasn't changed, but still adds the translator comment.
         """
         po_source = """#. This is an existing comment
 # This is a translator comment : 22.12.14
@@ -502,12 +502,12 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_combocomments_existingcomment(self):
         """
         Tests a differing automatic comment is added if there is an existing
-        automatic comment, but still adds the translator comment
+        automatic comment, but still adds the translator comment.
         """
         po_source = """#. This is a new comment
 # This is a translator comment : 22.12.14
@@ -532,10 +532,10 @@ This is a new comment
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
     def test_existingcomments(self):
-        """Tests that no extra space is added when there are no changes to existing comments"""
+        """Tests that no extra space is added when there are no changes to existing comments."""
         po_source = """#. This is an existing comment
 # This is an existing translator comment : 22.12.14
 #: ResourceKey
@@ -559,11 +559,11 @@ msgstr "Bézier-kurwe"
   </data>"""
         )
         resx_file = self.po2resx(resx_template, po_source)
-        assert resx_file == expected_output
+        assert resx_file == expected_output.replace("\n", "\r\n")
 
 
 class TestPO2RESXCommand(test_convert.TestConvertCommand, TestPO2RESX):
-    """Tests running actual po2resx commands on files"""
+    """Tests running actual po2resx commands on files."""
 
     convertmodule = po2resx
     expected_options = [

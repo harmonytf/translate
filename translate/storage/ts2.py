@@ -16,7 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""Module for handling Qt linguist (.ts) files.
+"""
+Module for handling Qt linguist (.ts) files.
 
 This will eventually replace the older ts.py which only supports the older
 format. While converters haven't been updated to use this module, we retain
@@ -35,11 +36,48 @@ from lxml import etree
 
 from translate.lang import data
 from translate.misc.multistring import multistring
+from translate.misc.xml_helpers import safely_set_text
 from translate.storage import lisa
 from translate.storage.placeables import general
 from translate.storage.workflow import StateEnum as state
 
 # TODO: handle translation types
+
+
+# Encode some characters same as lupdate, this matches tsProtect implementation:
+#
+# - quote and apostrophe
+# - any whitespace character above 0x7f
+#
+# The latter can be generated using:
+# >>> for i in  range(sys.maxunicode):
+# ...     if i > 0x7f and chr(i).isspace():
+# ...         print(f'   {chr(i)!r}: "&#x{i:x};",')
+
+OUTPUT_TRANS = str.maketrans(
+    {
+        "'": "&apos;",
+        '"': "&quot;",
+        "\xa0": "&#xa0;",
+        "\u1680": "&#x1680;",
+        "\u2000": "&#x2000;",
+        "\u2001": "&#x2001;",
+        "\u2002": "&#x2002;",
+        "\u2003": "&#x2003;",
+        "\u2004": "&#x2004;",
+        "\u2005": "&#x2005;",
+        "\u2006": "&#x2006;",
+        "\u2007": "&#x2007;",
+        "\u2008": "&#x2008;",
+        "\u2009": "&#x2009;",
+        "\u200a": "&#x200a;",
+        "\u2028": "&#x2028;",
+        "\u2029": "&#x2029;",
+        "\u202f": "&#x202f;",
+        "\u205f": "&#x205f;",
+        "\u3000": "&#x3000;",
+    }
+)
 
 
 class tsunit(lisa.LISAunit):
@@ -77,7 +115,6 @@ class tsunit(lisa.LISAunit):
 
     def createlanguageNode(self, lang, text, purpose):
         """Returns an xml Element setup with given parameters."""
-
         assert purpose
         if purpose == "target":
             purpose = "translation"
@@ -85,7 +122,7 @@ class tsunit(lisa.LISAunit):
         # TODO: check language
         # lisa.setXMLlang(langset, lang)
 
-        langset.text = text
+        safely_set_text(langset, text)
         return langset
 
     def _getsourcenode(self):
@@ -120,8 +157,7 @@ class tsunit(lisa.LISAunit):
         if self.hasplural():
             numerus_nodes = targetnode.findall(self.namespaced("numerusform"))
             return multistring([node.text or "" for node in numerus_nodes])
-        else:
-            return targetnode.text or ""
+        return targetnode.text or ""
 
     @target.setter
     def target(self, target):
@@ -150,15 +186,15 @@ class tsunit(lisa.LISAunit):
             self.xmlelement.set("numerus", "yes")
             for string in strings:
                 numerus = etree.SubElement(targetnode, self.namespaced("numerusform"))
-                numerus.text = string or ""
+                safely_set_text(numerus, string or "")
         else:
-            targetnode.text = target or ""
+            safely_set_text(targetnode, target or "")
 
     def hasplural(self):
         return self.xmlelement.get("numerus") == "yes"
 
     def addnote(self, text, origin=None, position="append"):
-        """Add a note specifically in the appropriate *comment* tag"""
+        """Add a note specifically in the appropriate *comment* tag."""
         current_notes = self.getnotes(origin)
         self.removenotes(origin)
         if origin in ["programmer", "developer", "source code"]:
@@ -168,11 +204,11 @@ class tsunit(lisa.LISAunit):
                 self.xmlelement, self.namespaced("translatorcomment")
             )
         if position == "append":
-            note.text = "\n".join(
-                item for item in [current_notes, text.strip()] if item
+            safely_set_text(
+                note, "\n".join(item for item in [current_notes, text.strip()] if item)
             )
         else:
-            note.text = text.strip()
+            safely_set_text(note, text.strip())
 
     def getnotes(self, origin=None):
         # TODO: consider only responding when origin has certain values
@@ -212,7 +248,7 @@ class tsunit(lisa.LISAunit):
             self._gettargetnode().attrib.pop("type")
 
     def isreview(self):
-        """States whether this unit needs to be reviewed"""
+        """States whether this unit needs to be reviewed."""
         return self._gettype() == "unfinished"
 
     def isfuzzy(self):
@@ -234,10 +270,8 @@ class tsunit(lisa.LISAunit):
         if context_name is not None:
             if self.source:
                 return context_name + self.source
-            else:
-                return context_name
-        else:
-            return self.source
+            return context_name
+        return self.source
 
     def istranslatable(self):
         # Found a file in the wild with no context and an empty source. This
@@ -368,9 +402,8 @@ class tsunit(lisa.LISAunit):
             # format doesn't really do
             if self.target:
                 return self.S_FUZZY
-            else:
-                return self.S_UNTRANSLATED
-        elif type == "vanished":
+            return self.S_UNTRANSLATED
+        if type == "vanished":
             return self.S_OBSOLETE
         return self.statemap[type]
 
@@ -399,7 +432,7 @@ class tsfile(lisa.LISAfile):
 <TS>
 </TS>
 """
-    XMLindent = {"indent": "    ", "skip": ["TS"], "toplevel": False}
+    XMLindent = {"indent": "    ", "skip": {"TS"}, "toplevel": False}
     # For conformance with Qt output, write XML declaration with double quotes
     XMLuppercaseEncoding = False
     namespace = ""
@@ -419,7 +452,8 @@ class tsfile(lisa.LISAfile):
             self.body = self.document.getroot()
 
     def getsourcelanguage(self):
-        """Get the source language for this .ts file.
+        """
+        Get the source language for this .ts file.
 
         The 'sourcelanguage' attribute was only added to the TS format in
         Qt v4.5. We return 'en' if there is no sourcelanguage set.
@@ -437,7 +471,8 @@ class tsfile(lisa.LISAfile):
         return lang
 
     def gettargetlanguage(self):
-        """Get the target language for this .ts file.
+        """
+        Get the target language for this .ts file.
 
         :return: ISO code e.g. af, fr, pt_BR
         :rtype: String
@@ -445,7 +480,8 @@ class tsfile(lisa.LISAfile):
         return data.normalize_code(self.header.get("language"))
 
     def settargetlanguage(self, targetlanguage):
-        """Set the target language for this .ts file to *targetlanguage*.
+        """
+        Set the target language for this .ts file to *targetlanguage*.
 
         :param targetlanguage: ISO code e.g. af, fr, pt_BR
         :type targetlanguage: String
@@ -454,15 +490,15 @@ class tsfile(lisa.LISAfile):
             self.header.set("language", targetlanguage)
 
     def _createcontext(self, contextname, comment=None):
-        """Creates a context node with an optional comment"""
+        """Creates a context node with an optional comment."""
         context = etree.SubElement(
             self.document.getroot(), self.namespaced(self.bodyNode)
         )
         name = etree.SubElement(context, self.namespaced("name"))
-        name.text = contextname
+        safely_set_text(name, contextname)
         if comment:
             comment_node = etree.SubElement(context, "comment")
-            comment_node.text = comment
+            safely_set_text(comment_node, comment)
         return context
 
     def _getcontextname(self, contextnode):
@@ -485,7 +521,8 @@ class tsfile(lisa.LISAfile):
     def addunit(
         self, unit, new=True, contextname=None, comment=None, createifmissing=True
     ):
-        """Adds the given unit to the last used body node (current context).
+        """
+        Adds the given unit to the last used body node (current context).
 
         If the contextname is specified, switch to that context (creating it if
         allowed by createifmissing).
@@ -502,7 +539,8 @@ class tsfile(lisa.LISAfile):
         return unit
 
     def _switchcontext(self, contextname, comment, createifmissing=False):
-        """Switch the current context to the one named contextname, optionally
+        """
+        Switch the current context to the one named contextname, optionally
         creating it if it doesn't exist.
         """
         self._contextname = contextname
@@ -518,28 +556,26 @@ class tsfile(lisa.LISAfile):
         return True
 
     def nplural(self):
+        code = self.header.get("language").lower().replace("-", "_").split("_")[0]
+        if code in data.qt_plural_tags:
+            return len(data.qt_plural_tags[code])
         lang = data.get_language(self.header.get("language"))
         if lang is None:
             return 1
         return lang[1]
 
-    def serialize_hook(self, treestring):
+    def serialize_hook(self, treestring: str) -> bytes:
         pos = 0
         out = []
         while pos >= 0:
-            nextpos = treestring.find(b"<", pos)
-            out.append(
-                treestring[pos:nextpos]
-                .replace(b"'", b"&apos;")
-                .replace(b'"', b"&quot;")
-                .replace(b"\xc2\xa0", b"&#xa0;")
-            )
+            nextpos = treestring.find("<", pos)
+            out.append(treestring[pos:nextpos].translate(OUTPUT_TRANS))
             pos = nextpos
-            nextpos = treestring.find(b">", pos)
+            nextpos = treestring.find(">", pos)
             out.append(treestring[pos:nextpos])
             pos = nextpos
         out.append(treestring[pos:])
-        return b"".join(out)
+        return super().serialize_hook("".join(out))
 
     def serialize(self, out):
         """Write the XML document to a file."""

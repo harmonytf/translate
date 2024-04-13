@@ -20,7 +20,7 @@
 
 from lxml import etree
 
-from translate.misc.xml_helpers import getText, namespaced, reindent
+from translate.misc.xml_helpers import getText, namespaced, reindent, safely_set_text
 from translate.storage import base
 
 
@@ -37,7 +37,7 @@ class FlatXMLUnit(base.TranslationUnit):
         namespace=None,
         element_name=None,
         attribute_name=None,
-        **kwargs
+        **kwargs,
     ):
         self.namespace = namespace or self.DEFAULT_NAMESPACE
         self.element_name = element_name or self.DEFAULT_ELEMENT_NAME
@@ -69,7 +69,7 @@ class FlatXMLUnit(base.TranslationUnit):
         """Updates the translated string of this unit."""
         if self.target == target:
             return
-        self.xmlelement.text = target
+        safely_set_text(self.xmlelement, target)
 
     def namespaced(self, name):
         """Returns name in Clark notation."""
@@ -87,7 +87,8 @@ class FlatXMLUnit(base.TranslationUnit):
     def createfromxmlElement(
         cls, element, namespace=None, element_name="str", attribute_name="key"
     ):
-        """Attempts to create a unit from the passed element.
+        """
+        Attempts to create a unit from the passed element.
 
         element must not be None and must match the given element name
         (including namespace); otherwise None will be returned.
@@ -111,7 +112,7 @@ class NOTPROVIDED:
 
 
 class FlatXMLFile(base.TranslationStore):
-    """Class representing a flat XML file store"""
+    """Class representing a flat XML file store."""
 
     UnitClass = FlatXMLUnit
     _name = "Flat XML File"
@@ -137,7 +138,7 @@ class FlatXMLFile(base.TranslationStore):
         namespace=None,
         indent_chars=NOTPROVIDED,
         trailing_eol=None,
-        **kwargs
+        **kwargs,
     ):
         self.root_name = root_name or self.DEFAULT_ROOT_NAME
         self.value_name = value_name or self.DEFAULT_VALUE_NAME
@@ -186,7 +187,7 @@ class FlatXMLFile(base.TranslationStore):
             # ensure trailing EOL for VCS
             self.root.tail = "\n"
 
-    def serialize(self, out=None):
+    def serialize(self, out):
         self.reindent()
         self.document.write(
             out, xml_declaration=self.XML_DECLARATION, encoding=self.encoding
@@ -214,10 +215,7 @@ class FlatXMLFile(base.TranslationStore):
         root_name = self.namespaced(self.root_name)
         assert (
             self.root.tag == root_name
-        ), "expected root name to be {} but got {}".format(
-            root_name,
-            self.root.tag,
-        )
+        ), f"expected root name to be {root_name} but got {self.root.tag}"
         if len(self.root):
             # we'd expect at least one child element to have the correct
             # name and attributes; otherwise the name parameters might've
@@ -227,10 +225,7 @@ class FlatXMLFile(base.TranslationStore):
             matching_nodes = list(self.root.iterchildren(value_name))
             assert len(
                 matching_nodes
-            ), "expected value name to be {} but first node is {}".format(
-                value_name,
-                self.root[0].tag,
-            )
+            ), f"expected value name to be {value_name} but first node is {self.root[0].tag}"
 
             assert matching_nodes[0].get(
                 self.key_name

@@ -2,7 +2,7 @@ from translate.misc import quote
 
 
 def test_find_all():
-    """tests the find_all function"""
+    """Tests the find_all function."""
     assert quote.find_all("", "a") == []
     assert quote.find_all("a", "b") == []
     assert quote.find_all("a", "a") == [0]
@@ -13,7 +13,7 @@ def test_find_all():
 
 
 def test_extract():
-    """tests the extract function"""
+    """Tests the extract function."""
     assert quote.extract("the <quoted> part", "<", ">", "\\", 0) == ("<quoted>", False)
     assert quote.extract("the 'quoted' part", "'", "'", "\\", 0) == ("'quoted'", False)
     assert quote.extract("the 'isn\\'t escaping fun' part", "'", "'", "\\", 0) == (
@@ -42,7 +42,7 @@ def test_extract():
 
 
 def test_extractwithoutquotes():
-    """tests the extractwithoutquotes function"""
+    """Tests the extractwithoutquotes function."""
     assert quote.extractwithoutquotes("the <quoted> part", "<", ">", "\\", 0) == (
         "quoted",
         False,
@@ -97,7 +97,7 @@ def isnewlineortabescape(escape):
 
 
 def test_extractwithoutquotes_passfunc():
-    """tests the extractwithoutquotes function with a function for includeescapes as a parameter"""
+    """Tests the extractwithoutquotes function with a function for includeescapes as a parameter."""
     assert quote.extractwithoutquotes(
         "<test \\r \\n \\t \\\\>", "<", ">", "\\", 0, isnewlineortabescape
     ) == ("test r \\n \\t \\", False)
@@ -127,18 +127,18 @@ class TestEncoding:
 
     @staticmethod
     def test_mozillaescapemarginspaces():
-        assert quote.mozillaescapemarginspaces(" ") == ""
+        assert quote.mozillaescapemarginspaces(" ") == r"\u0020"
         assert quote.mozillaescapemarginspaces("A") == "A"
-        assert quote.mozillaescapemarginspaces(" abc ") == "\\u0020abc\\u0020"
-        assert quote.mozillaescapemarginspaces("  abc ") == "\\u0020 abc\\u0020"
+        assert quote.mozillaescapemarginspaces(" abc ") == r"\u0020abc\u0020"
+        assert quote.mozillaescapemarginspaces("  abc ") == r"\u0020 abc\u0020"
 
     @staticmethod
     def test_mozilla_control_escapes():
-        r"""test that we do \uNNNN escapes for certain control characters instead of converting to UTF-8 characters"""
+        r"""Test that we do \uNNNN escapes for certain control characters instead of converting to UTF-8 characters."""
         prefix, suffix = "bling", "blang"
         for control in ("\u0005", "\u0006", "\u0007", "\u0011"):
             string = prefix + control + suffix
-            assert quote.escapecontrols(string) == string
+            assert quote.escapecontrols(string) != string
 
     @staticmethod
     def test_propertiesdecode():
@@ -148,6 +148,15 @@ class TestEncoding:
         assert quote.propertiesdecode("abc\N{LEFT CURLY BRACKET}") == "abc{"
         assert quote.propertiesdecode("abc\\") == "abc\\"
         assert quote.propertiesdecode("abc\\") == "abc\\"
+
+    @staticmethod
+    def test_controlchars():
+        assert quote.javapropertiesencode(quote.propertiesdecode("\u0001")) == r"\u0001"
+        assert quote.javapropertiesencode(quote.propertiesdecode("\\u01")) == r"\u0001"
+        assert quote.javapropertiesencode("\\") == "\\\\"
+        assert quote.javapropertiesencode("\x01") == "\\u0001"
+        assert quote.propertiesdecode("\x01") == "\x01"
+        assert quote.propertiesdecode("\\u0001") == "\x01"
 
     @staticmethod
     def test_properties_decode_slashu():
@@ -167,17 +176,17 @@ class TestEncoding:
             assert quote.htmlentitydecode(to) == from_
 
     def test_htmlencoding(self):
-        """test that we can encode and decode simple HTML entities"""
+        """Test that we can encode and decode simple HTML entities."""
         raw_encoded = [("€", "&euro;"), ("©", "&copy;"), ('"', "&quot;")]
         self._html_encoding_helper(raw_encoded)
 
     @staticmethod
     def test_htmlencoding_existing_entities():
-        """test that we don't mess existing entities"""
+        """Test that we don't mess existing entities."""
         assert quote.htmlentityencode("&amp;") == "&amp;"
 
     def test_htmlencoding_passthrough(self):
-        """test that we can encode and decode things that look like HTML entities but aren't"""
+        """Test that we can encode and decode things that look like HTML entities but aren't."""
         raw_encoded = [
             ("copy quot", "copy quot")
         ]  # Raw text should have nothing done to it.
@@ -185,7 +194,7 @@ class TestEncoding:
 
     @staticmethod
     def test_htmlencoding_nonentities():
-        """tests to give us full coverage"""
+        """Tests to give us full coverage."""
         for encoded, real in [
             ("Some &; text", "Some &; text"),
             ("&copy ", "&copy "),

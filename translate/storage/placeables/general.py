@@ -35,7 +35,8 @@ __all__ = (
 
 
 def regex_parse(cls, pstr):
-    """A parser method to extract placeables from a string based on a regular
+    """
+    A parser method to extract placeables from a string based on a regular
     expression. Use this function as the ``@parse()`` method of a placeable
     class.
     """
@@ -80,17 +81,20 @@ class NumberPlaceable(Ph):
 
 
 class QtFormattingPlaceable(Ph):
-    """Placeable representing a Qt string formatting variable.
+    """
+    Placeable representing a Qt string formatting variable.
 
     Implemented following Qt documentation on
     `QString::arg <http://doc.trolltech.com/4.5/qstring.html#arg>`_ where
     the placeables are refered to as 'place markers'
 
-    Notes:
+    Notes
+    -----
       - Place markers can be reordered
       - Place markers may be repeated
       - 'L' use a localised representation e.g. in a number
       - %% some in the wild to escape real %, not documented (not in regex)
+
     """
 
     iseditable = False
@@ -107,7 +111,8 @@ class QtFormattingPlaceable(Ph):
 
 
 class PythonFormattingPlaceable(Ph):
-    """Placeable representing a Python string formatting variable.
+    """
+    Placeable representing a Python string formatting variable.
 
     Implemented following Python documentation on `String Formatting Operations
     <http://docs.python.org/library/stdtypes.html#string-formatting-operations>`_
@@ -131,7 +136,8 @@ class PythonFormattingPlaceable(Ph):
 
 
 class JavaMessageFormatPlaceable(Ph):
-    """Placeable representing a Java MessageFormat formatting variable.
+    """
+    Placeable representing a Java MessageFormat formatting variable.
 
     Implemented according to the Java `MessageFormat documentation
     <http://java.sun.com/j2se/1.4.2/docs/api/java/text/MessageFormat.html>`_.
@@ -342,7 +348,7 @@ class XMLTagPlaceable(Ph):
 
 
 class OptionPlaceable(Ph):
-    """Placeble handling command line options e.g. --help"""
+    """Placeble handling command line options e.g. --help."""
 
     istranslatable = False
     regex = re.compile(
